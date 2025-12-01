@@ -1,3 +1,6 @@
+#custom ignores
+toy_files/out*
+
 # Environment Variables
 .env
 .env.local

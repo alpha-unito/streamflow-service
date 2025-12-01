@@ -1,0 +1,6 @@
+fastapi[standard]
+redis
+types-redis
+uvicorn
+pyyaml
+streamflow==0.2.0.dev13
