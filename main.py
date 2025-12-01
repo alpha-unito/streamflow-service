@@ -14,6 +14,8 @@ from streamflow.ext.utils import load_extensions
 from streamflow.log_handler import logger as sf_logger
 from streamflow.main import build_context, _async_run
 
+import yaml
+from model import InputItem
 
 app = FastAPI()
 
@@ -35,3 +37,22 @@ def toy_run():
     asyncio.run(_async_run(args))
 
 
+
+
+#streamflow run with args post 
+@app.post("/run")
+def run(request: InputItem)  -> None:
+
+    asyncio.run(_async_run(Namespace(**request.args)))
+
+# json input for post("/run"). `args` in the json is the Namespace needed by _async_run() to work 
+''' 
+{
+  "args": {
+    "name": null,
+    "streamflow_file": "./toy_files/streamflow.yml",
+    "outdir": "./toy_files/run_out"
+  }
+}
+'''
+    
