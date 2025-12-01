@@ -1,5 +1,5 @@
 #custom ignores
-toy_files/out*
+toy_files/*out
 
 # Environment Variables
 .env

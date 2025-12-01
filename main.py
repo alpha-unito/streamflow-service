@@ -17,16 +17,21 @@ from streamflow.main import build_context, _async_run
 
 app = FastAPI()
 
+
+
 #Toy args
 args = Namespace(
     name = None,
     streamflow_file=str(os.path.join("./toy_files", "streamflow.yml")),
-    outdir="./toy_files",
+    outdir="./toy_files/toy_run_out",
     # add any other required CLI parameters
 )
 
+
+
 #Toy streamflow run
 @app.get("/toy_run")
-def toy_run() -> None:
-    ret = asyncio.run(_async_run(args))
+def toy_run():
+    asyncio.run(_async_run(args))
+
 
