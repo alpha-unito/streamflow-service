@@ -21,7 +21,7 @@ app = FastAPI()
 
 
 #Toy args
-args = Namespace(
+toy_args = Namespace(
     name = None,
     streamflow_file=str(os.path.join("./toy_files", "streamflow.yml")),
     outdir="./toy_files/toy_run_out",
@@ -33,7 +33,7 @@ args = Namespace(
 #Toy streamflow run
 @app.get("/toy_run")
 def toy_run():
-    asyncio.run(_async_run(args))
+    asyncio.run(_async_run(toy_args))
 
 
 
