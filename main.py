@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 
 # import for streamflow run
 
@@ -56,4 +56,28 @@ def run(request: InputItem)  -> None:
   }
 }
 '''
+# ----------------------------------------
+#UPLOAD FILES ROUTES
+
+def checkFileValidity(file_n : str) :
+    return not (file_n.endswith(".yml") or file_n.endswith(".yaml") or file_n.endswith(".cwl"))
     
+@app.post("/upload-streamflow")
+async def upload_yml(file: UploadFile = File(...)):
+    filename = file.filename or ''
+    # Validate extension
+    if checkFileValidity(filename):
+        raise HTTPException(status_code=400, detail="File must be a .yml, .yaml or .cwl")
+
+    # Read file content
+    content = await file.read()
+
+    try:
+        parsed_yaml = yaml.safe_load(content)
+    except yaml.YAMLError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid YAML: {e}")
+
+    return {
+        "filename": file.filename,
+        "parsed_yaml": parsed_yaml
+    }
