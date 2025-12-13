@@ -40,27 +40,45 @@ def toy_run():
 
 #streamflow run with args post 
 @app.post("/run")
-def run(request: InputItem)  -> None:
-    checkDir(defaultProjectDir(request))
-    request.args["outdir"] = defaultProjectDir(request) + "/output"
-    #request.args["streamflow_file"] = defaultProjectDir(request) + "/streamflow.yml"
-    asyncio.run(_async_run(Namespace(**request.args)))
+def run(files: list[UploadFile])  -> None:
+    request: InputItem = InputItem(usr="guest-0")
+    if files.__len__() < 3:
+        raise HTTPException(status_code=400, detail="files must be at least 3") #TODO: verify if files can be more than 3
+    for elem in files:
+        if checkFileValidity(elem.filename):
+            raise HTTPException(status_code=400, detail=f"{elem.file.name} must be a .yml, .yaml or .cwl")
+        
+    # save tmp dir // creates temporary directory
+    proj_path = addDefaultProjectDir(request)
+    checkOrCreateDir(proj_path)
+
+    # put files into tmp directory
+    for elem in files:
+        raw = elem.file.read()
+        filename = elem.filename
+        with open(proj_path+"/"+str(filename), "xb") as f:
+            f.write(raw)
+            f.close()
+
+    # create args and map it with tmp files
+    args:dict[str,str] = {}
+    args["name"] = ""
+    args["outdir"] = proj_path + "/output"
+    args["streamflow_file"] = proj_path + "/streamflow.yml"
+    asyncio.run(_async_run(Namespace(**args)))
+    # TODO: return log in a file (?)
 
 # json input for post("/run"). `args` in the json is the Namespace needed by _async_run() to work 
 ''' 
 {
-  "usr": "guest-0",
-  "args": {
-    "name": null,
-    "streamflow_file": "./toy_files/streamflow.yml"
-  }
+  "usr": "guest-0"
 }
 '''
 # ----------------------------------------
 #UPLOAD FILES ROUTES
 
-def checkFileValidity(file_n : str) :
-    return not (file_n.endswith(".yml") or file_n.endswith(".yaml") or file_n.endswith(".cwl"))
+def checkFileValidity(file_n : str | None) :
+    return file_n is None or not (file_n.endswith(".yml") or file_n.endswith(".yaml") or file_n.endswith(".cwl"))
     
 @app.post("/upload-streamflow")
 async def upload_yml(file: UploadFile = File(...)):

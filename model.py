@@ -5,14 +5,13 @@ import os
 
 class InputItem(BaseModel):
     usr: str
-    args: dict
 
 # preserved data: a dict with username:ListOfOutputDirectories. Until the outputs will be into tmp, 
 #   it is not necessary to maintain coerency between this dict and the actual files
 outputsByUsers: dict[str, list[str]] = {}
 
 #counts projects inside "/tmp/$usr/" and produces a progressive pathname
-def defaultProjectDir(req: InputItem) ->str:
+def addDefaultProjectDir(req: InputItem) ->str:
     position = os.path.join("/tmp/" + req.usr)
     number_files = 0
     try :
@@ -29,7 +28,8 @@ def defaultProjectDir(req: InputItem) ->str:
     return dirName
 
 
-def checkDir(path) :
+# Creates a directory and return if it exists
+def checkOrCreateDir(path) :
     try:
         os.makedirs(path, exist_ok=True)
         print(f"Directory '{path}' created successfully.")
