@@ -3,16 +3,13 @@ from pydantic import BaseModel
 from argparse import Namespace
 import os
 
-class InputItem(BaseModel):
-    usr: str
-
 # preserved data: a dict with username:ListOfOutputDirectories. Until the outputs will be into tmp, 
 #   it is not necessary to maintain coerency between this dict and the actual files
 outputsByUsers: dict[str, list[str]] = {}
 
 #counts projects inside "/tmp/$usr/" and produces a progressive pathname
-def addDefaultProjectDir(req: InputItem) ->str:
-    position = os.path.join("/tmp/" + req.usr)
+def addDefaultProjectDir(usr: str) ->str:
+    position = os.path.join("/tmp/" + usr)
     number_files = 0
     try :
         number_files = len(os.listdir(position))
@@ -21,10 +18,10 @@ def addDefaultProjectDir(req: InputItem) ->str:
     finally :
         dirName: str = os.path.join(position, "run_"+ str(number_files))
 
-    if req.usr in outputsByUsers :
-        outputsByUsers[req.usr].append(dirName)
+    if usr in outputsByUsers :
+        outputsByUsers[usr].append(dirName)
     else :
-        outputsByUsers[req.usr]  = [dirName]
+        outputsByUsers[usr]  = [dirName]
     return dirName
 
 

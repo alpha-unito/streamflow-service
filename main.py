@@ -39,9 +39,8 @@ def toy_run():
 
 
 #streamflow run with args post 
-@app.post("/run")
-def run(files: list[UploadFile])  -> None:
-    request: InputItem = InputItem(usr="guest-0")
+@app.post("/run/{usr}")
+def run(usr: str, files: list[UploadFile])  -> None:
     if files.__len__() < 3:
         raise HTTPException(status_code=400, detail="files must be at least 3") #TODO: verify if files can be more than 3
     for elem in files:
@@ -49,7 +48,7 @@ def run(files: list[UploadFile])  -> None:
             raise HTTPException(status_code=400, detail=f"{elem.file.name} must be a .yml, .yaml or .cwl")
         
     # save tmp dir // creates temporary directory
-    proj_path = addDefaultProjectDir(request)
+    proj_path = addDefaultProjectDir(usr) #TODO: verify if usr exists
     checkOrCreateDir(proj_path)
 
     # put files into tmp directory
@@ -70,9 +69,7 @@ def run(files: list[UploadFile])  -> None:
 
 # json input for post("/run"). `args` in the json is the Namespace needed by _async_run() to work 
 ''' 
-{
-  "usr": "guest-0"
-}
+{"usr":"Guest-0"}
 '''
 # ----------------------------------------
 #UPLOAD FILES ROUTES
