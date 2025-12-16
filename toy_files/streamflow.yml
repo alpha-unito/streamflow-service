@@ -1,8 +1,0 @@
-version: v1.0
-workflows:
-  master:
-    type: cwl
-    config: 
-      file: hello.cwl
-      settings: inputs.yml
- 
