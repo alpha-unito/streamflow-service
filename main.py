@@ -20,22 +20,15 @@ from model import *
 app = FastAPI()
 
 
-#Toy args
-toy_args = Namespace(
-    name = None,
-    streamflow_file=str(os.path.join("./toy_files", "streamflow.yml")),
-    outdir="./toy_files/toy_run_out",
-    # add any other required CLI parameters
-)
-
-
-
 #Toy streamflow run
-@app.get("/toy_run")
-def toy_run():
-    asyncio.run(_async_run(toy_args))
-
-
+@app.get("/example_run/{example_name}")
+def example_run(example_name: str):
+    # create args and map it with tmp files
+    args:dict[str,str] = {}
+    args["name"] = ""
+    args["outdir"] = f"/tmp/streamflow-service/{example_name}/output"
+    args["streamflow_file"] = examples_runs[example_name]+"/streamflow.yml"
+    asyncio.run(_async_run(Namespace(**args)))
 
 
 #streamflow run with args post 

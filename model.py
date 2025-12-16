@@ -5,7 +5,12 @@ import os
 
 # preserved data: a dict with username:ListOfOutputDirectories. Until the outputs will be into tmp, 
 #   it is not necessary to maintain coerency between this dict and the actual files
-outputsByUsers: dict[str, list[str]] = {}
+outputs_by_users: dict[str, list[str]] = {} #TODO: as a "library online tool, this seems useless"
+
+examples_runs: dict[str, str] = {
+    "toy_run" :     "./SFExamples/toy_files",
+    "motor_bike" :  "./SFExamples/workflow-openfoam-new-version/src/openfoam-cwl"
+}
 
 #counts projects inside "/tmp/$usr/" and produces a progressive pathname
 def addDefaultProjectDir(usr: str) ->str:
@@ -37,3 +42,4 @@ def checkOrCreateDir(path) :
     except Exception as e:
         print(f"An error occurred: {e}")
         return False
+
