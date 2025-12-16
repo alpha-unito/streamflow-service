@@ -23,10 +23,10 @@ def addDefaultProjectDir(usr: str) ->str:
     finally :
         dirName: str = os.path.join(position, "run_"+ str(number_files))
 
-    if usr in outputsByUsers :
-        outputsByUsers[usr].append(dirName)
+    if usr in outputs_by_users :
+        outputs_by_users[usr].append(dirName)
     else :
-        outputsByUsers[usr]  = [dirName]
+        outputs_by_users[usr]  = [dirName]
     return dirName
 
 
