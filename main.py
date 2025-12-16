@@ -77,8 +77,8 @@ def run(usr: str, files: list[UploadFile])  -> None:
 def checkFileValidity(file_n : str | None) :
     return file_n is None or not (file_n.endswith(".yml") or file_n.endswith(".yaml") or file_n.endswith(".cwl"))
     
-@app.post("/upload-streamflow")
-async def upload_yml(file: UploadFile = File(...)):
+@app.post("/upload_streamflow")
+async def upload_streamflow(file: UploadFile = File(...)):
     filename = file.filename or ''
     # Validate extension
     if checkFileValidity(filename):
