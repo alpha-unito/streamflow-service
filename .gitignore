@@ -66,8 +66,3 @@ Thumbs.db
 *.pid
 instance/
 .webassets-cache
-
-## react interface
-
-./react-interface/node_modules
-./react-interface/scripts
