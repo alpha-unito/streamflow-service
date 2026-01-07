@@ -1,34 +1,32 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
 import './App.css'
+import type { Workflow } from "./types/workflow";
+import { WorkflowList } from './components/WorkflowList.tsx'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
+  const listTitle = selectedWorkflow ? selectedWorkflow.name : "Workflows Available";
+  
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+     <div className="container-md min-vh-100 min-vw-100 bg-secondary p-3">
+      <div className="container-sm bg-light rounded shadow p-5">
+      <h1>{listTitle}</h1>
+      
+        <WorkflowList onSelectWorkflow={setSelectedWorkflow} 
+                      selectedWorkflowId={selectedWorkflow?.id}
+        /> 
+
+
+        {selectedWorkflow && (
+          <div>
+            <h2>{selectedWorkflow.name}</h2>
+            <p>{selectedWorkflow.description}</p>
+            {/* Later: fetch details or execute workflow */}
+          </div>
+        )}
       </div>
-      <h1>Vite + React</h1>
-      <div className="p-3 border rounded bg-light">
-        <button className="btn btn-primary" onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    </div>
   )
 }
 
