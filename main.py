@@ -39,6 +39,11 @@ def example_run(example_name: str):
     args["streamflow_file"] = examples_runs[example_name]+"/streamflow.yml"
     asyncio.run(_async_run(Namespace(**args)))
 
+#Toy streamflow run
+@app.get("/workflows", response_model=list[Workflow])
+def getWorkFlows():
+    # create args and map it with tmp files
+    return workflows_info
 
 #streamflow run with args post 
 @app.post("/run/{usr}")

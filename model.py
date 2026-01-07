@@ -7,10 +7,50 @@ import os
 #   it is not necessary to maintain coerency between this dict and the actual files
 outputs_by_users: dict[str, list[str]] = {} #TODO: as a "library online tool, this seems useless"
 
+
+class Workflow(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    version: Optional[str] = None
+
 examples_runs: dict[str, str] = {
     "toy_run" :     "./SFExamples/toy_files",
     "motor_bike" :  "./SFExamples/workflow-openfoam-new-version/src/openfoam-cwl"
 }
+
+workflows_info: list[Workflow] = [ #TODO: search into a real dir the workflows 
+  Workflow(
+      id="wf-000",
+      name="Toy Run",
+      description="A simple example workflow demonstrating basic functionality.",
+      version="1.0.0"
+  ),
+  Workflow(
+      id="wf-001",
+      name="Motor Bike Simulation",
+      description="A complex workflow for simulating motor bike aerodynamics using OpenFOAM.",
+      version="2.1.0"
+  ),
+  Workflow(
+      id="wf-002",
+      name="Data Ingestion Pipeline",
+      description="Ingests raw data from external sources.",
+      version="1.0.0"
+  ),
+  Workflow(
+      id="wf-003",
+      name="Data Cleaning Workflow",
+      description="Cleans and validates datasets.",
+      version="1.2.3"
+  ),
+  Workflow(
+      id="wf-004",
+      name="Model Training",
+      description="Trains ML models.",
+      version="2.0.0"
+  )
+]
 
 #counts projects inside "/tmp/$usr/" and produces a progressive pathname
 def addDefaultProjectDir(usr: str) ->str:
