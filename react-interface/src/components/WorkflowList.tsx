@@ -24,7 +24,7 @@ export function WorkflowList({ onSelectWorkflow }: WorkflowListProps) {
   if (error) return <p>Error: {error}</p>;
 
   return (
-    <div className="container-md w-75 d-flex flex-column gap-2 m-auto">
+    <div className="container-md w-75 d-flex flex-column gap-2 m-auto p-3">
       {workflows.map((workflow) => (
         <button
           key={workflow.id}
