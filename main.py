@@ -39,11 +39,6 @@ def example_run(example_name: str):
     args["streamflow_file"] = examples_runs[example_name]+"/streamflow.yml"
     asyncio.run(_async_run(Namespace(**args)))
 
-#Toy streamflow run
-@app.get("/workflows", response_model=list[Workflow])
-def getWorkFlows():
-    # create args and map it with tmp files
-    return workflows_info
 
 #streamflow run with args post 
 @app.post("/run/{usr}")
@@ -55,7 +50,7 @@ def run(usr: str, files: list[UploadFile])  -> None:
             raise HTTPException(status_code=400, detail=f"{elem.file.name} must be a .yml, .yaml or .cwl")
         
     # save tmp dir // creates temporary directory
-    proj_path = addDefaultProjectDir(usr) #TODO: verify if usr exists
+    proj_path = addDefaultProjectDir(usr) #TODO: verify if usr exists edit: probably user is no more necessary
     checkOrCreateDir(proj_path)
 
     # put files into tmp directory
@@ -72,7 +67,7 @@ def run(usr: str, files: list[UploadFile])  -> None:
     args["outdir"] = proj_path + "/output"
     args["streamflow_file"] = proj_path + "/streamflow.yml"
     asyncio.run(_async_run(Namespace(**args)))
-    # TODO: return log in a file (?)
+    # TODO: send log to client
 
 # json input for post("/run"). `args` in the json is the Namespace needed by _async_run() to work 
 ''' 
@@ -84,6 +79,7 @@ def run(usr: str, files: list[UploadFile])  -> None:
 def checkFileValidity(file_n : str | None) :
     return file_n is None or not (file_n.endswith(".yml") or file_n.endswith(".yaml") or file_n.endswith(".cwl"))
     
+
 @app.post("/upload_streamflow")
 async def upload_streamflow(file: UploadFile = File(...)):
     filename = file.filename or ''
@@ -103,3 +99,16 @@ async def upload_streamflow(file: UploadFile = File(...)):
         "filename": file.filename,
         "parsed_yaml": parsed_yaml
     }
+
+# ----------------------------------------
+# Routes actually used by the view
+@app.get("/workflows", response_model=list[Workflow])
+def getWorkFlows():
+    # create args and map it with tmp files
+    return workflows_list
+
+@app.get("/workflows/{workflow_id}", response_model=WorkflowDetails)
+def getWorkFlowDetails(workflow_id: str):
+    if workflow_id != Workflow_Details.id:  #Todo: manage multiple workflows details, taken from real dir
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    return Workflow_Details
