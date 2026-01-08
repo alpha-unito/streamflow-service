@@ -5,7 +5,7 @@ import { WorkflowList } from './components/WorkflowList.tsx'
 
 function App() {
   const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
-  const listTitle = selectedWorkflow ? selectedWorkflow.name : "Workflows Available";
+  const listTitle = selectedWorkflow ? selectedWorkflow.name : "Available Workflows";
   
 
   return (
