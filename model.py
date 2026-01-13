@@ -66,9 +66,9 @@ La configurazione della simulazione determina automaticamente il numero di sotto
 
 Descrizione degli step CWL:
 Il workflow generato è definito nel file motorbike-pipeline.cwl ed è suddiviso in tre passaggi principali:
--prep: fase di preparazione della mesh, che esegue il workflow prep-mesh.cwl. In questa fase vengono svolte le operazioni di inizializzazione dell’ambiente, copia della mesh superficiale della moto, generazione delle feature edges e creazione della mesh di base tramite blockMesh.
--decompose: fase di decomposizione e raffinamento della mesh, che esegue decompose-snappy.cwl. In questo step la mesh viene decomposta per l’elaborazione parallela e successivamente raffinata tramite snappyHexMesh.
--foam_run: fase di simulazione vera e propria, che esegue foam-run.cwl. Include la generazione del riepilogo delle patch della mesh, l’esecuzione del solver potentialFoam per la soluzione iniziale, il solver principale simpleFoam per la risoluzione delle equazioni di Navier–Stokes incomprimibili e la ricostruzione finale della mesh mediante reconstructParMesh.''',
+- **prep**: fase di preparazione della mesh, che esegue il workflow prep-mesh.cwl. In questa fase vengono svolte le operazioni di inizializzazione dell’ambiente, copia della mesh superficiale della moto, generazione delle feature edges e creazione della mesh di base tramite blockMesh.
+- **decompose**: fase di decomposizione e raffinamento della mesh, che esegue decompose-snappy.cwl. In questo step la mesh viene decomposta per l’elaborazione parallela e successivamente raffinata tramite snappyHexMesh.
+- **foam_run**: fase di simulazione vera e propria, che esegue foam-run.cwl. Include la generazione del riepilogo delle patch della mesh, l’esecuzione del solver potentialFoam per la soluzione iniziale, il solver principale simpleFoam per la risoluzione delle equazioni di Navier–Stokes incomprimibili e la ricostruzione finale della mesh mediante reconstructParMesh.''',
   imageUrl="https://drive.google.com/file/d/1R8NPg6H_NJ1xPeGOZI11Cr1wdqd8lZsd/view?usp=sharing"
 )
 

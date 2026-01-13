@@ -2,6 +2,9 @@
 import { useEffect, useState } from "react"
 import type { Workflow } from "../types/workflow"
 import type { WorkflowDetails as WorkflowDetailsType } from "../types/workflowDetails"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
+
 
 import {
   fetchWorkflowDetails,
@@ -63,9 +66,13 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
       <div className="col-md-6 d-flex flex-column">
         <h3>{workflow.name}</h3>
 
-        <p className="flex-grow-1 overflow-auto">
-          {details.longDescription}
-        </p>
+        <div className="flex-grow-1 overflow-auto flex-grow-1 overflow-auto border rounded p-3 bg-white text-start">
+          <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          >
+            {details.longDescription ?? ""}
+          </ReactMarkdown>
+        </div>
 
         <button
           className="btn btn-success mt-3 align-self-start"
