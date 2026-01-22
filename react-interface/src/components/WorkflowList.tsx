@@ -27,7 +27,7 @@ export function WorkflowList({ onSelectWorkflow }: WorkflowListProps) {
     <div className="container-md w-75 d-flex flex-column gap-2 m-auto p-3">
       {workflows.map((workflow) => (
         <button
-          key={workflow.id}
+          key={workflow.name}
           className="btn btn-outline-primary text-start w-100"
           onClick={() => onSelectWorkflow(workflow)}
         >

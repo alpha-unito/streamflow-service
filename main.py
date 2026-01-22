@@ -102,13 +102,36 @@ async def upload_streamflow(file: UploadFile = File(...)):
 
 # ----------------------------------------
 # Routes actually used by the view
+
 @app.get("/workflows", response_model=list[Workflow])
 def getWorkFlows():
     # create args and map it with tmp files
     return workflows_list
 
-@app.get("/workflows/{workflow_id}", response_model=WorkflowDetails)
-def getWorkFlowDetails(workflow_id: str):
-    if workflow_id != Workflow_Details.id:  #Todo: manage multiple workflows details, taken from real dir
+@app.get("/workflows/{workflow_name}", response_model=WorkflowDetails)
+def getWorkFlowDetails(workflow_name: str):
+    res = Workflow_Details.get(workflow_name)
+    if res is None:  #Todo: manage multiple workflows details, taken from real dir
         raise HTTPException(status_code=404, detail="Workflow not found")
-    return Workflow_Details
+    return res
+
+#streamflow run with args post 
+@app.post("/workflows/{workflow_name}/execute") #TODO: use usr output directories and use @app.post("{workflow_name}/execute/{usr}") 
+def execute(workflow_name: str, files: list[UploadFile])  -> None: #def execute(workflow_name: str,usr: str, files: list[UploadFile])  -> None:
+    
+    usr = "Guest-0" #TODO: remove this line when usr will be used in path
+
+    if examples_runs.get(workflow_name) is not None:
+      proj_path = addDefaultProjectDir(usr) #TODO: verify if usr exists edit: probably user is no more necessary
+      checkOrCreateDir(proj_path)
+
+      # create args and map it with tmp files
+      args:dict[str,str] = {}
+      args["name"] = ""
+      args["outdir"] = proj_path + "/output"
+      args["streamflow_file"] = examples_runs.get(workflow_name, "")
+      return asyncio.run(_async_run(Namespace(**args)))
+    else:
+      raise HTTPException(status_code=404, detail="Workflow not found")
+
+    

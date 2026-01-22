@@ -25,16 +25,16 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
     setLoading(true)
     setError(null)
 
-    fetchWorkflowDetails(workflow.id)
+    fetchWorkflowDetails(workflow.name)
       .then(setDetails)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
-  }, [workflow.id])
+  }, [workflow.name])
 
   const handleExecute = async () => {
     try {
       setExecuting(true);
-      await executeWorkflow(workflow.id)
+      await executeWorkflow(workflow.name)
       alert("Workflow execution started")
     } catch (err) {
       if (err instanceof Error) {
@@ -52,35 +52,37 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
   if (!details) return null
 
   return (
-    <div className="row h-100">
-      {/* Left: Image */}
-      <div className="col-md-6 d-flex align-items-center justify-content-center">
-        <img
-          src={details.imageUrl}
-          alt={`${workflow.name} steps`}
-          className="img-fluid rounded border"
-        />
-      </div>
-
-      {/* Right: Description */}
-      <div className="col-md-6 d-flex flex-column">
-        <h3>{workflow.name}</h3>
-
-        <div className="flex-grow-1 overflow-auto flex-grow-1 overflow-auto border rounded p-3 bg-white text-start">
-          <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          >
-            {details.longDescription ?? ""}
-          </ReactMarkdown>
+    <div>
+      <div className="row h-100">
+        {/* Left: Image */}
+        <div className="col-md-6 d-flex align-items-center justify-content-center">
+          <img
+            src={details.imageUrl}
+            alt={`${workflow.name} steps`}
+            className="img-fluid rounded border"
+          />
         </div>
 
-        <button
-          className="btn btn-success mt-3 align-self-start"
-          onClick={handleExecute}
-          disabled={executing}
-        >
-          {executing ? "Executing..." : "Execute workflow"}
-        </button>
+        {/* Right: Description */}
+        <div className="col-md-6 d-flex flex-column">
+          <h3>{workflow.name}</h3>
+
+          <div className="flex-grow-1 overflow-auto flex-grow-1 overflow-auto border rounded p-3 bg-white text-start">
+            <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            >
+              {details.longDescription ?? ""}
+            </ReactMarkdown>
+          </div>
+
+          <button
+            className="btn btn-success mt-3 align-self-start"
+            onClick={handleExecute}
+            disabled={executing}
+          >
+            {executing ? "Executing..." : "Execute workflow"}
+          </button>
+        </div>
       </div>
     </div>
   )

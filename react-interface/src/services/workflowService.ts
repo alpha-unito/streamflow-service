@@ -29,10 +29,10 @@ export async function fetchWorkflowDetails( workflowId: string ): Promise<Workfl
   return response.json();
 }
 
-export async function executeWorkflow(workflowId: string): Promise<void> {
+export async function executeWorkflow(workflowName: string): Promise<void> {
   
   const response = await fetch(
-    `${API_BASE_URL}/workflows/${workflowId}/execute`,
+    `${API_BASE_URL}/workflows/${workflowName}/execute`,
     { method: "POST" }
   );
 
