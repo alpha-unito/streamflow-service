@@ -2,7 +2,7 @@
 import type { Workflow } from "../types/workflow"
 import type { WorkflowDetails } from "../types/workflowDetails"
 
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = "http://130.192.100.196:8000";
 
 export async function fetchWorkflows(): Promise<Workflow[]> {
   
