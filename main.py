@@ -35,7 +35,7 @@ def example_run(example_name: str):
     # create args and map it with tmp files
     args:dict[str,str] = {}
     args["name"] = ""
-    args["outdir"] = f"/tmp/streamflow-service/{example_name}/output"
+    args["outdir"] = f"~/tmp/streamflow-service/{example_name}/output"
     args["streamflow_file"] = examples_runs[example_name]+"/streamflow.yml"
     asyncio.run(_async_run(Namespace(**args)))
 

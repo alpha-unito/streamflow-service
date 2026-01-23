@@ -40,3 +40,16 @@ export async function executeWorkflow(workflowName: string): Promise<void> {
     throw new Error("Failed to execute workflow")
   }
 }
+
+export async function executeExampleWorkflow(workflowName: string): Promise<void> {
+  
+  const response = await fetch(
+    `${API_BASE_URL}/example_run/${workflowName}`,
+    { method: "GET" }
+  )
+  if (!response.ok) {
+    alert("Example run failed: " + response.statusText);
+  } else {
+    alert("Example run started for " + workflowName);
+  }
+}

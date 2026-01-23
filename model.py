@@ -19,8 +19,8 @@ class WorkflowDetails(BaseModel):
   imageUrl: str
 
 examples_runs: dict[str, str] = {
-    "Toy Run" :     "./SFExamples/toy_files",
-    "Motor Bike Simulation" :  "./SFExamples/workflow-openfoam-new-version/src/openfoam-cwl",
+    "toy_run" :     "./SFExamples/toy_files",
+    # "motor_bike_simulation" :  "./SFExamples/workflow-openfoam-new-version/src/openfoam-cwl",
     "streamflow_parallel" :"SFExamples/streamflow_parallel (2)/streamflow.yml"
 }
 
