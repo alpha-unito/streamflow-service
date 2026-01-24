@@ -21,7 +21,7 @@ class WorkflowDetails(BaseModel):
 examples_runs: dict[str, str] = {
     "toy_run" :     "./SFExamples/toy_files",
     # "motor_bike_simulation" :  "./SFExamples/workflow-openfoam-new-version/src/openfoam-cwl",
-    "streamflow_parallel" :"SFExamples/streamflow_parallel (2)/streamflow.yml"
+    "streamflow_parallel" :"SFExamples/streamflow_parallel/streamflow.yml"
 }
 
 workflows_list: list[Workflow] = [ #TODO: search into a real dir the workflows 
@@ -75,7 +75,7 @@ Il workflow generato è definito nel file motorbike-pipeline.cwl ed è suddiviso
 }
 
 #counts projects inside "/tmp/$usr/" and produces a progressive pathname
-def addDefaultProjectDir(usr: str) ->str:
+def getDefaultProjectDir(usr: str, project_name: str | None) ->str:
   position = os.path.join("/tmp/" + usr)
   number_files = 0
   try :
@@ -83,25 +83,25 @@ def addDefaultProjectDir(usr: str) ->str:
   except Exception as e :
     print(f"exception occurred: {e}")
   finally :
-    dirName: str = os.path.join(position, "run_"+ str(number_files))
+    if project_name is not None and project_name != "" :
+      dirName: str = os.path.join(position, project_name)
+    else :
+      dirName: str = os.path.join(position, "project_"+ str(number_files))
 
+  # TODO: check if this is useful
   if usr in outputs_by_users :
     outputs_by_users[usr].append(dirName)
   else :
     outputs_by_users[usr]  = [dirName]
-  return dirName
 
-
-# Creates a directory and return if it exists
-def checkOrCreateDir(path) :
   try:
-    os.makedirs(path, exist_ok=True)
-    print(f"Directory '{path}' created successfully.")
-    return True
+    os.makedirs(dirName, exist_ok=True)
+    print(f"Directory '{dirName}' created successfully.")
   except PermissionError:
-    print(f"Permission denied: Unable to create '{path}'.")
-    return False
+    print(f"Permission denied: Unable to create '{dirName}'.")
   except Exception as e:
     print(f"An error occurred: {e}")
-  return False
+
+  return dirName
+
 

@@ -28,6 +28,23 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=4646)
+
+# ----------------------------------------
+
+@app.get("/workflows", response_model=list[Workflow])
+def getWorkFlows():
+    # create args and map it with tmp files
+    return workflows_list
+
+@app.get("/workflows/{workflow_name}", response_model=WorkflowDetails)
+def getWorkFlowDetails(workflow_name: str):
+    res = Workflow_Details.get(workflow_name)
+    if res is None:  #Todo: manage multiple workflows details, taken from real dir
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    return res
 
 #Toy streamflow run
 @app.get("/example_run/{example_name}")
@@ -39,19 +56,19 @@ def example_run(example_name: str):
     args["streamflow_file"] = examples_runs[example_name]+"/streamflow.yml"
     asyncio.run(_async_run(Namespace(**args)))
 
+# ----------------------------------------
 
 #streamflow run with args post 
-@app.post("/run/{usr}")
-def run(usr: str, files: list[UploadFile])  -> None:
-    if files.__len__() < 3:
-        raise HTTPException(status_code=400, detail="files must be at least 3") #TODO: verify if files can be more than 3
+@app.post("/run/{usr}/{project_name}")
+def run(usr: str, project_name: str | None, files: list[UploadFile])  -> None:
+    if files.__len__() != 2:
+        raise HTTPException(status_code=400, detail="files must be 2") # streamflow.yml + config.cwl
     for elem in files:
         if checkFileValidity(elem.filename):
             raise HTTPException(status_code=400, detail=f"{elem.file.name} must be a .yml, .yaml or .cwl")
         
     # save tmp dir // creates temporary directory
-    proj_path = addDefaultProjectDir(usr) #TODO: verify if usr exists edit: probably user is no more necessary
-    checkOrCreateDir(proj_path)
+    proj_path = getDefaultProjectDir(usr, project_name)
 
     # put files into tmp directory
     for elem in files:
@@ -73,47 +90,10 @@ def run(usr: str, files: list[UploadFile])  -> None:
 ''' 
 {"usr":"Guest-0"}
 '''
-# ----------------------------------------
-#UPLOAD FILES ROUTES
 
 def checkFileValidity(file_n : str | None) :
-    return file_n is None or not (file_n.endswith(".yml") or file_n.endswith(".yaml") or file_n.endswith(".cwl"))
+    return file_n is None or not (file_n.endswith("streamflow.yml") or file_n.endswith("streamflow.yaml") or file_n.endswith(".cwl")) # TODO: check if necessary or how to do it proprerly
     
-
-@app.post("/upload_streamflow")
-async def upload_streamflow(file: UploadFile = File(...)):
-    filename = file.filename or ''
-    # Validate extension
-    if checkFileValidity(filename):
-        raise HTTPException(status_code=400, detail="File must be a .yml, .yaml or .cwl")
-
-    # Read file content
-    content = await file.read()
-
-    try:
-        parsed_yaml = yaml.safe_load(content)
-    except yaml.YAMLError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid YAML: {e}")
-
-    return {
-        "filename": file.filename,
-        "parsed_yaml": parsed_yaml
-    }
-
-# ----------------------------------------
-# Routes actually used by the view
-
-@app.get("/workflows", response_model=list[Workflow])
-def getWorkFlows():
-    # create args and map it with tmp files
-    return workflows_list
-
-@app.get("/workflows/{workflow_name}", response_model=WorkflowDetails)
-def getWorkFlowDetails(workflow_name: str):
-    res = Workflow_Details.get(workflow_name)
-    if res is None:  #Todo: manage multiple workflows details, taken from real dir
-        raise HTTPException(status_code=404, detail="Workflow not found")
-    return res
 
 #streamflow run with args post 
 @app.post("/workflows/{workflow_name}/execute") #TODO: use usr output directories and use @app.post("{workflow_name}/execute/{usr}") 
@@ -122,8 +102,8 @@ def execute(workflow_name: str, files: list[UploadFile])  -> None: #def execute(
     usr = "Guest-0" #TODO: remove this line when usr will be used in path
 
     if examples_runs.get(workflow_name) is not None:
-      proj_path = addDefaultProjectDir(usr) #TODO: verify if usr exists
-      checkOrCreateDir(proj_path)
+      proj_path = getDefaultProjectDir(usr, workflow_name) #TODO: verify if usr exists
+
 
       # create args and map it with tmp files
       args:dict[str,str] = {}
@@ -133,9 +113,3 @@ def execute(workflow_name: str, files: list[UploadFile])  -> None: #def execute(
       return asyncio.run(_async_run(Namespace(**args)))
     else:
       raise HTTPException(status_code=404, detail="Workflow not found")
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=4646)
-
-
