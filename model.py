@@ -76,7 +76,7 @@ Il workflow generato è definito nel file motorbike-pipeline.cwl ed è suddiviso
 
 #counts projects inside "/tmp/$usr/" and produces a progressive pathname
 def getDefaultProjectDir(usr: str, project_name: str | None) ->str:
-  position = os.path.join("/tmp/" + usr)
+  position = os.path.join("./usrs_dir/" + usr)
   number_files = 0
   try :
     number_files = len(os.listdir(position))

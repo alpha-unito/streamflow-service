@@ -27,11 +27,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=4646)
-
 # ----------------------------------------
 
 @app.get("/workflows", response_model=list[Workflow])
@@ -47,22 +42,26 @@ def getWorkFlowDetails(workflow_name: str):
     return res
 
 #Toy streamflow run
-@app.get("/example_run/{example_name}")
-def example_run(example_name: str):
+@app.get("/example_run/{example_name}/{usr}")
+def example_run(example_name: str, usr: str)  -> None:
     # create args and map it with tmp files
     args:dict[str,str] = {}
     args["name"] = ""
-    args["outdir"] = f"~/tmp/streamflow-service/{example_name}/output"
+    args["outdir"] = f"./usrs_dir/{usr}/{example_name}/output"
     args["streamflow_file"] = examples_runs[example_name]+"/streamflow.yml"
     asyncio.run(_async_run(Namespace(**args)))
 
 # ----------------------------------------
 
-#streamflow run with args post 
+def checkFileValidity(file_n : str | None) :
+    return file_n is None or not (file_n.endswith(".yml") or file_n.endswith(".yaml") or file_n.endswith(".cwl"))
+     # TODO: check if necessary or how to do it proprerly
+
+# streamflow run with args post 
 @app.post("/run/{usr}/{project_name}")
 def run(usr: str, project_name: str | None, files: list[UploadFile])  -> None:
-    if files.__len__() != 2:
-        raise HTTPException(status_code=400, detail="files must be 2") # streamflow.yml + config.cwl
+    if files.__len__() < 2:
+        raise HTTPException(status_code=400, detail="files must at least 2") # streamflow.yml + config.cwl
     for elem in files:
         if checkFileValidity(elem.filename):
             raise HTTPException(status_code=400, detail=f"{elem.file.name} must be a .yml, .yaml or .cwl")
@@ -77,6 +76,8 @@ def run(usr: str, project_name: str | None, files: list[UploadFile])  -> None:
         with open(proj_path+"/"+str(filename), "xb") as f:
             f.write(raw)
             f.close()
+        print(f"saved file: {proj_path+'/'+str(filename)}")
+          
 
     # create args and map it with tmp files
     args:dict[str,str] = {}
@@ -90,11 +91,7 @@ def run(usr: str, project_name: str | None, files: list[UploadFile])  -> None:
 ''' 
 {"usr":"Guest-0"}
 '''
-
-def checkFileValidity(file_n : str | None) :
-    return file_n is None or not (file_n.endswith("streamflow.yml") or file_n.endswith("streamflow.yaml") or file_n.endswith(".cwl")) # TODO: check if necessary or how to do it proprerly
     
-
 #streamflow run with args post 
 @app.post("/workflows/{workflow_name}/execute") #TODO: use usr output directories and use @app.post("{workflow_name}/execute/{usr}") 
 def execute(workflow_name: str, files: list[UploadFile])  -> None: #def execute(workflow_name: str,usr: str, files: list[UploadFile])  -> None:
@@ -113,3 +110,8 @@ def execute(workflow_name: str, files: list[UploadFile])  -> None: #def execute(
       return asyncio.run(_async_run(Namespace(**args)))
     else:
       raise HTTPException(status_code=404, detail="Workflow not found")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=4646)
