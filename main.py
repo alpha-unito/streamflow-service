@@ -122,7 +122,7 @@ def execute(workflow_name: str, files: list[UploadFile])  -> None: #def execute(
     usr = "Guest-0" #TODO: remove this line when usr will be used in path
 
     if examples_runs.get(workflow_name) is not None:
-      proj_path = addDefaultProjectDir(usr) #TODO: verify if usr exists edit: probably user is no more necessary
+      proj_path = addDefaultProjectDir(usr) #TODO: verify if usr exists
       checkOrCreateDir(proj_path)
 
       # create args and map it with tmp files
