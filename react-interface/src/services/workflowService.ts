@@ -41,10 +41,34 @@ export async function executeWorkflow(workflowName: string): Promise<void> {
   }
 }
 
+export async function uploadAndRunWorkflow(files: FileList, projectName: string): Promise<void> {
+  const formData = new FormData();
+  
+  // Add project name to form data
+  formData.append('projectName', projectName);
+  
+  // Add all files to form data
+  for (let i = 0; i < files.length; i++) {
+    formData.append('files', files[i]);
+  }
+  
+  const response = await fetch(
+    `${API_BASE_URL}/run/guest-0/${projectName}`, // TODO: replace guest-0 with actual user ID when auth is implemented
+    { 
+      method: "POST",
+      body: formData
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to upload and run workflow");
+  }
+}
+
 export async function executeExampleWorkflow(workflowName: string): Promise<void> {
   
   const response = await fetch(
-    `${API_BASE_URL}/example_run/${workflowName}`,
+    `${API_BASE_URL}/example_run/${workflowName}/guest-0`,
     { method: "GET" }
   )
   if (!response.ok) {

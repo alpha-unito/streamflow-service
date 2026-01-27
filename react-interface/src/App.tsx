@@ -4,7 +4,8 @@ import './App.css'
 import type { Workflow } from "./types/workflow";
 import { WorkflowList } from './components/WorkflowList.tsx'
 import { WorkflowDetails } from "./components/WorkflowDetails"
-import { executeExampleWorkflow } from './services/workflowService.ts';
+import { WorkflowForm } from './components/WorkflowForm.tsx'
+import { executeExampleWorkflow, uploadAndRunWorkflow } from './services/workflowService.ts';
 
 
 function App() {
@@ -21,6 +22,17 @@ function App() {
     }
   };
 
+  // File upload and run handler
+  const handleUploadAndRun = async (files: FileList, projectName: string) => {
+    try {
+      await uploadAndRunWorkflow(files, projectName);
+      alert(`Successfully started workflow for project: ${projectName}`);
+    } catch (error) {
+      alert("Error uploading workflow: " + error);
+      throw error; // Re-throw to allow form to handle the error state
+    }
+  };
+
   return (
      <div className="container-md min-vh-100 min-vw-100 bg-secondary p-3">
       <div className="container-sm bg-light rounded shadow p-5">
@@ -34,6 +46,10 @@ function App() {
           <button className="btn btn-primary ms-2" onClick={() => handleExampleRun("toy_run")}>Run Example Workflow</button>
         </div>
         <h1>{listTitle}</h1>
+        
+        {/* Upload Form - only show when not viewing workflow details */}
+        {!selectedWorkflow && <WorkflowForm onSubmit={handleUploadAndRun} />}
+        
         {/* Content */}
         {selectedWorkflow ? (
           <WorkflowDetails workflow={selectedWorkflow} />
