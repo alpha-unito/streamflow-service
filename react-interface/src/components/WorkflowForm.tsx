@@ -1,29 +1,73 @@
 // components/WorkflowForm.tsx
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { FormEvent, ChangeEvent } from 'react';
 
 interface WorkflowFormProps {
-  onSubmit: (files: FileList, projectName: string) => void;
+  onSubmit: (files: File[], projectName: string) => void;
+}
+
+interface FileItem {
+  file: File;
+  id: string;
+  isDirectory?: boolean;
 }
 
 export function WorkflowForm({ onSubmit }: WorkflowFormProps) {
   const [projectName, setProjectName] = useState<string>('');
-  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
+  const [selectedItems, setSelectedItems] = useState<FileItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const directoryInputRef = useRef<HTMLInputElement>(null);
 
   const handleProjectNameChange = (e: ChangeEvent<HTMLInputElement>) => {
     setProjectName(e.target.value);
   };
 
+  const handleAddFiles = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAddDirectory = () => {
+    directoryInputRef.current?.click();
+  };
+
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setSelectedFiles(e.target.files);
+    const files = e.target.files;
+    if (files) {
+      const newItems: FileItem[] = Array.from(files).map(file => ({
+        file,
+        id: `${Date.now()}-${Math.random()}`,
+        isDirectory: false
+      }));
+      setSelectedItems(prev => [...prev, ...newItems]);
+    }
+    // Reset input
+    if (e.target) e.target.value = '';
+  };
+
+  const handleDirectoryChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      const newItems: FileItem[] = Array.from(files).map(file => ({
+        file,
+        id: `${Date.now()}-${Math.random()}`,
+        isDirectory: true
+      }));
+      setSelectedItems(prev => [...prev, ...newItems]);
+    }
+    // Reset input
+    if (e.target) e.target.value = '';
+  };
+
+  const removeItem = (id: string) => {
+    setSelectedItems(prev => prev.filter(item => item.id !== id));
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     
-    if (!selectedFiles || selectedFiles.length === 0) {
-      alert('Please select at least one file');
+    if (selectedItems.length === 0) {
+      alert('Please select at least one file or directory');
       return;
     }
     
@@ -35,13 +79,11 @@ export function WorkflowForm({ onSubmit }: WorkflowFormProps) {
     setIsSubmitting(true);
     
     try {
-      await onSubmit(selectedFiles, projectName.trim());
+      const files = selectedItems.map(item => item.file);
+      await onSubmit(files, projectName.trim());
       // Reset form after successful submission
       setProjectName('');
-      setSelectedFiles(null);
-      // Reset file input
-      const fileInput = document.getElementById('file-input') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
+      setSelectedItems([]);
     } catch (error) {
       console.error('Error submitting workflow:', error);
     } finally {
@@ -71,38 +113,90 @@ export function WorkflowForm({ onSubmit }: WorkflowFormProps) {
           />
         </div>
 
-        {/* File Upload Input */}
+        {/* File Upload Section */}
         <div className="mb-3">
-          <label htmlFor="file-input" className="form-label">
-            Workflow Files <span className="text-danger">*</span>
+          <label className="form-label">
+            Add Files and Directories <span className="text-danger">*</span>
           </label>
+          
+          {/* Hidden file inputs */}
           <input
+            ref={fileInputRef}
             type="file"
-            id="file-input"
-            className="form-control"
+            style={{ display: 'none' }}
             onChange={handleFileChange}
             multiple
-            required
-            disabled={isSubmitting}
             accept=".cwl,.yml,.yaml,.json,.py"
+            disabled={isSubmitting}
           />
+          
+          <input
+            ref={directoryInputRef}
+            type="file"
+            style={{ display: 'none' }}
+            onChange={handleDirectoryChange}
+            {...({ webkitdirectory: "" } as any)}
+            disabled={isSubmitting}
+          />
+          
+          {/* Action buttons */}
+          <div className="d-flex gap-2 mb-3">
+            <button
+              type="button"
+              className="btn btn-outline-primary"
+              onClick={handleAddFiles}
+              disabled={isSubmitting}
+            >
+              <i className="bi bi-file-plus me-2"></i>
+              Add Files
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline-success"
+              onClick={handleAddDirectory}
+              disabled={isSubmitting}
+            >
+              <i className="bi bi-folder-plus me-2"></i>
+              Add Directory
+            </button>
+          </div>
+          
           <div className="form-text">
-            Select one or more workflow files (.cwl, .yml, .yaml, .json, .py)
+            Add workflow files (.cwl, .yml, .yaml, .json, .py) and directories one by one
           </div>
         </div>
 
-        {/* File List Display */}
-        {selectedFiles && selectedFiles.length > 0 && (
+        {/* Selected Items Display */}
+        {selectedItems.length > 0 && (
           <div className="mb-3">
-            <h6>Selected Files:</h6>
-            <ul className="list-group list-group-flush">
-              {Array.from(selectedFiles).map((file, index) => (
-                <li key={index} className="list-group-item d-flex justify-content-between align-items-center">
-                  <span>{file.name}</span>
-                  <small className="text-muted">{(file.size / 1024).toFixed(1)} KB</small>
-                </li>
+            <h6>Selected Items ({selectedItems.length}):</h6>
+            <div className="list-group">
+              {selectedItems.map((item) => (
+                <div key={item.id} className="list-group-item d-flex justify-content-between align-items-center">
+                  <div className="d-flex align-items-center">
+                    <i className={`me-2 ${item.isDirectory ? 'bi bi-folder' : 'bi bi-file-earmark'}`}></i>
+                    <div>
+                      <div>{item.file.name}</div>
+                      <small className="text-muted">
+                        {item.isDirectory ? 'Directory' : `${(item.file.size / 1024).toFixed(1)} KB`}
+                        {item.file.webkitRelativePath && (
+                          <span> • {item.file.webkitRelativePath}</span>
+                        )}
+                      </small>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-outline-danger btn-sm"
+                    onClick={() => removeItem(item.id)}
+                    disabled={isSubmitting}
+                    title="Remove item"
+                  >
+                    <i className="bi bi-trash"></i>
+                  </button>
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
         )}
 
@@ -111,7 +205,7 @@ export function WorkflowForm({ onSubmit }: WorkflowFormProps) {
           <button
             type="submit"
             className="btn btn-primary"
-            disabled={isSubmitting || !projectName.trim() || !selectedFiles || selectedFiles.length === 0}
+            disabled={isSubmitting || !projectName.trim() || selectedItems.length === 0}
           >
             {isSubmitting ? (
               <>

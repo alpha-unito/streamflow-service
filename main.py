@@ -60,23 +60,40 @@ def checkFileValidity(file_n : str | None) :
 # streamflow run with args post 
 @app.post("/run/{usr}/{project_name}")
 def run(usr: str, project_name: str | None, files: list[UploadFile])  -> None:
-    if files.__len__() < 2:
-        raise HTTPException(status_code=400, detail="files must at least 2") # streamflow.yml + config.cwl
+    if files.__len__() < 1:
+        raise HTTPException(status_code=400, detail="At least one file is required")
+    
+    # Validate files
     for elem in files:
         if checkFileValidity(elem.filename):
-            raise HTTPException(status_code=400, detail=f"{elem.file.name} must be a .yml, .yaml or .cwl")
+            raise HTTPException(status_code=400, detail=f"{elem.filename} must be a .yml, .yaml or .cwl")
         
     # save tmp dir // creates temporary directory
     proj_path = getDefaultProjectDir(usr, project_name)
 
-    # put files into tmp directory
+    # put files into tmp directory with proper directory structure
     for elem in files:
         raw = elem.file.read()
         filename = elem.filename
-        with open(proj_path+"/"+str(filename), "xb") as f:
+        
+        # Handle directory structure - check if filename contains path separators
+        if filename and ('/' in filename or '\\' in filename):
+            # Normalize path separators
+            normalized_path = filename.replace('\\', '/')
+            file_path = os.path.join(proj_path, normalized_path)
+            
+            # Create directory structure if it doesn't exist
+            dir_path = os.path.dirname(file_path)
+            os.makedirs(dir_path, exist_ok=True)
+            print(f"Created directory structure: {dir_path}")
+        else:
+            # Single file, save directly in project root
+            file_path = os.path.join(proj_path, str(filename))
+        
+        # Write file to its destination
+        with open(file_path, "wb") as f:
             f.write(raw)
-            f.close()
-        print(f"saved file: {proj_path+'/'+str(filename)}")
+        print(f"saved file: {file_path}")
           
 
     # create args and map it with tmp files

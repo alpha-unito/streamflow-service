@@ -23,7 +23,7 @@ function App() {
   };
 
   // File upload and run handler
-  const handleUploadAndRun = async (files: FileList, projectName: string) => {
+  const handleUploadAndRun = async (files: File[], projectName: string) => {
     try {
       await uploadAndRunWorkflow(files, projectName);
       alert(`Successfully started workflow for project: ${projectName}`);

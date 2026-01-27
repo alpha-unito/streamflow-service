@@ -41,7 +41,7 @@ export async function executeWorkflow(workflowName: string): Promise<void> {
   }
 }
 
-export async function uploadAndRunWorkflow(files: FileList, projectName: string): Promise<void> {
+export async function uploadAndRunWorkflow(files: File[], projectName: string): Promise<void> {
   const formData = new FormData();
   
   // Add project name to form data
