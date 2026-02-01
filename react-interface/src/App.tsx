@@ -5,11 +5,12 @@ import type { Workflow } from "./types/workflow";
 import { WorkflowList } from './components/WorkflowList.tsx'
 import { WorkflowDetails } from "./components/WorkflowDetails"
 import { WorkflowForm } from './components/WorkflowForm.tsx'
-import { executeExampleWorkflow, uploadAndRunWorkflow } from './services/workflowService.ts';
+import { executeExampleWorkflow, uploadAndRunWorkflow, setCurrentUser } from './services/workflowService.ts';
 
 
 function App() {
   const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null> (null)
+  const [username, setUsername] = useState<string | null>(null)
   const listTitle = selectedWorkflow ? selectedWorkflow.name : "Available Workflows"
   const handleBackToList = () => {setSelectedWorkflow(null);}
   
@@ -25,13 +26,36 @@ function App() {
   // File upload and run handler
   const handleUploadAndRun = async (files: File[], projectName: string) => {
     try {
-      await uploadAndRunWorkflow(files, projectName);
-      alert(`Successfully started workflow for project: ${projectName}`);
+      const result = await uploadAndRunWorkflow(files, projectName);
+      alert(`Successfully started workflow! Workflow ID: ${result.workflow_id}`);
     } catch (error) {
       alert("Error uploading workflow: " + error);
       throw error; // Re-throw to allow form to handle the error state
     }
   };
+
+  const handleUsernameSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const formData = new FormData(event.target as HTMLFormElement);
+    const enteredUsername = formData.get("username") as string;
+    setUsername(enteredUsername);
+    setCurrentUser(enteredUsername);
+  };
+
+  if (!username) {
+    return (
+      <div className="container-md min-vh-100 min-vw-100 bg-secondary p-3 d-flex justify-content-center align-items-center">
+        <form onSubmit={handleUsernameSubmit} className="bg-light p-4 rounded shadow">
+          <h2 className="mb-3">Enter your username</h2>
+          <div className="mb-3">
+            <label htmlFor="username" className="form-label">Username</label>
+            <input type="text" id="username" name="username" className="form-control" required />
+          </div>
+          <button type="submit" className="btn btn-primary">Submit</button>
+        </form>
+      </div>
+    );
+  }
 
   return (
      <div className="container-md min-vh-100 min-vw-100 bg-secondary p-3">
