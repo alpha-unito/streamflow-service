@@ -17,6 +17,8 @@ from io import StringIO
 from os.path import expanduser
 import uuid
 from typing import Dict, Any
+import zipfile
+import mimetypes
 
 
 from streamflow.config.config import WorkflowConfig
@@ -187,6 +189,98 @@ def getWorkFlowDetails(workflow_name: str):
     if res is None:  #Todo: manage multiple workflows details, taken from real dir
         raise HTTPException(status_code=404, detail="Workflow not found")
     return res
+
+@app.get("/default_projects")
+def list_default_projects():
+    """List all available default projects"""
+    default_projects_dir = "./default_projects"
+    
+    if not os.path.exists(default_projects_dir):
+        return {"projects": [], "message": "No default projects directory found"}
+    
+    projects = []
+    try:
+        for item in os.listdir(default_projects_dir):
+            item_path = os.path.join(default_projects_dir, item)
+            if os.path.isdir(item_path):
+                # Get list of files in the project
+                files = []
+                for root, dirs, filenames in os.walk(item_path):
+                    for filename in filenames:
+                        rel_path = os.path.relpath(os.path.join(root, filename), item_path)
+                        files.append(rel_path.replace(os.sep, '/'))
+                
+                projects.append({
+                    "name": item,
+                    "files": files
+                })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading default projects: {str(e)}")
+    
+    return {"projects": projects}
+
+@app.get("/default_projects/{project_name}/files/{file_path:path}")
+def get_default_project_file(project_name: str, file_path: str):
+    """Download a specific file from a default project"""
+    # Sanitize the project name and file path to prevent directory traversal
+    project_name = os.path.basename(project_name)
+    file_path = file_path.lstrip('/')
+    
+    # Construct the full file path
+    full_path = os.path.join("./default_projects", project_name, file_path)
+    
+    # Security check: ensure the path is within the default_projects directory
+    abs_projects_dir = os.path.abspath("./default_projects")
+    abs_file_path = os.path.abspath(full_path)
+    
+    if not abs_file_path.startswith(abs_projects_dir):
+        raise HTTPException(status_code=403, detail="Access denied: path traversal not allowed")
+    
+    if not os.path.exists(full_path) or not os.path.isfile(full_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Determine MIME type
+    mime_type, _ = mimetypes.guess_type(full_path)
+    if mime_type is None:
+        mime_type = "application/octet-stream"
+    
+    return FileResponse(
+        path=full_path,
+        media_type=mime_type,
+        filename=os.path.basename(file_path)
+    )
+
+@app.get("/default_projects/{project_name}/download")
+def download_default_project_archive(project_name: str):
+    """Download entire default project as a ZIP archive"""
+    # Sanitize the project name
+    project_name = os.path.basename(project_name)
+    project_path = os.path.join("./default_projects", project_name)
+    
+    if not os.path.exists(project_path) or not os.path.isdir(project_path):
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Create a temporary ZIP file
+    temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    temp_zip.close()
+    
+    try:
+        with zipfile.ZipFile(temp_zip.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, dirs, files in os.walk(project_path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arc_name = os.path.relpath(file_path, project_path)
+                    zipf.write(file_path, arc_name)
+        
+        return FileResponse(
+            path=temp_zip.name,
+            media_type="application/zip",
+            filename=f"{project_name}.zip",
+            background=lambda: os.unlink(temp_zip.name)  # Clean up temp file after sending
+        )
+    except Exception as e:
+        os.unlink(temp_zip.name)  # Clean up on error
+        raise HTTPException(status_code=500, detail=f"Error creating archive: {str(e)}")
 
 # ----------------------------------------
 

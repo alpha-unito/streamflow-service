@@ -103,6 +103,52 @@ export async function getRunningWorkflows(): Promise<any> {
   return await response.json();
 }
 
+// Default Projects API functions
+export interface DefaultProject {
+  name: string;
+  files: string[];
+}
+
+export interface DefaultProjectsResponse {
+  projects: DefaultProject[];
+  message?: string;
+}
+
+export async function fetchDefaultProjects(): Promise<DefaultProjectsResponse> {
+  const response = await fetch(`${API_BASE_URL}/default_projects`);
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch default projects');
+  }
+  
+  return response.json();
+}
+
+export async function downloadDefaultProject(projectName: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/default_projects/${projectName}/download`);
+  
+  if (!response.ok) {
+    throw new Error('Failed to download project');
+  }
+  
+  // Get the file as a blob
+  const blob = await response.blob();
+  
+  // Create a download link
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${projectName}.zip`;
+  
+  // Trigger download
+  document.body.appendChild(link);
+  link.click();
+  
+  // Cleanup
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+}
+
 // export async function getWorkflowLogs(logFilePath: string): Promise<string> {
 //   // This would need to be implemented based on how you want to serve log files
 //   // For now, return a placeholder

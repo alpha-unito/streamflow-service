@@ -5,6 +5,7 @@ import type { Workflow } from "./types/workflow";
 import { WorkflowList } from './components/WorkflowList.tsx'
 import { WorkflowDetails } from "./components/WorkflowDetails"
 import { WorkflowForm } from './components/WorkflowForm.tsx'
+import { DefaultProjectDownloader } from './components/DefaultProjectDownloader.tsx'
 import { executeExampleWorkflow, uploadAndRunWorkflow, setCurrentUser } from './services/workflowService.ts';
 
 
@@ -70,6 +71,9 @@ function App() {
           <button className="btn btn-primary ms-2" onClick={() => handleExampleRun("toy_run")}>Run Example Workflow</button>
         </div>
         <h1>{listTitle}</h1>
+        
+        {/* Default Projects Downloader - only show when not viewing workflow details */}
+        {!selectedWorkflow && <DefaultProjectDownloader />}
         
         {/* Upload Form - only show when not viewing workflow details */}
         {!selectedWorkflow && <WorkflowForm onSubmit={handleUploadAndRun} />}
