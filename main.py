@@ -4,29 +4,15 @@ from fastapi.responses import FileResponse
 
 # import for streamflow run
 
-import asyncio
 import os
 import threading
 import logging
-import sys
-import tempfile
+import subprocess
 from datetime import datetime
-from argparse import Namespace
-from contextlib import redirect_stdout, redirect_stderr
-from io import StringIO
 from os.path import expanduser
-import uuid
 from typing import Dict, Any
 import zipfile
 import mimetypes
-
-
-from streamflow.config.config import WorkflowConfig
-from streamflow.config.validator import SfValidator
-from streamflow.cwl.main import main as cwl_main
-from streamflow.ext.utils import load_extensions
-from streamflow.log_handler import logger as sf_logger
-from streamflow.main import build_context, _async_run
 
 import yaml
 from model import *
@@ -46,9 +32,9 @@ running_workflows = {}
 workflow_logs = {}
 workflow_lock = threading.Lock()
 
-def get_custom_tmpdir(workflow_id: str):
-    """Get custom temporary directory for specific workflow"""
-    custom_tmpdir = os.path.join(expanduser("~"), "tmp", "streamflow", workflow_id)
+def get_custom_tmpdir():
+    """Get custom temporary directory for streamflow"""
+    custom_tmpdir = os.path.join(expanduser("~"), "tmp")
     os.makedirs(custom_tmpdir, exist_ok=True)
     return custom_tmpdir
 
@@ -74,65 +60,66 @@ def setup_logging(log_file_path: str):
     
     return logger
 
-def run_workflow_with_logging(args_dict: dict, log_file_path: str, workflow_id: str):
-    """Run workflow in separate thread with logging and isolated environment"""
+def run_workflow_with_subprocess(project_path: str, log_file_path: str, workflow_id: str):
+    """Run workflow using subprocess with logging"""
     logger = None
-    original_env = {}
     
     try:
         # Setup logging for this workflow
         logger = setup_logging(log_file_path)
         logger.info(f"Starting workflow {workflow_id}")
-        logger.info(f"Arguments: {args_dict}")
+        logger.info(f"Project path: {project_path}")
         
-        # Create isolated temporary directory for this workflow
-        workflow_tmpdir = get_custom_tmpdir(workflow_id)
-        logger.info(f"Using workflow-specific temporary directory: {workflow_tmpdir}")
+        # Create custom temporary directory
+        tmpdir = get_custom_tmpdir()
+        logger.info(f"Using temporary directory: {tmpdir}")
         
-        # Save original environment variables
-        original_env = {
-            'TMPDIR': os.environ.get('TMPDIR'),
-            'TMP': os.environ.get('TMP'),
-            'TEMP': os.environ.get('TEMP')
-        }
+        # Prepare environment for subprocess
+        env = os.environ.copy()
+        env['TMPDIR'] = tmpdir
         
-        # Set isolated environment variables for this workflow thread
-        os.environ['TMPDIR'] = workflow_tmpdir
-        os.environ['TMP'] = workflow_tmpdir
-        os.environ['TEMP'] = workflow_tmpdir
+        # Prepare the streamflow command
+        cmd = ['streamflow', 'run', 'streamflow.yml']
+        logger.info(f"Running command: {' '.join(cmd)}")
+        logger.info(f"Working directory: {project_path}")
         
-        # Use thread-local temporary directory
-        old_tempdir = tempfile.tempdir
-        tempfile.tempdir = workflow_tmpdir
+        # Run the subprocess
+        process = subprocess.Popen(
+            cmd,
+            cwd=project_path,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+            universal_newlines=True
+        )
         
-        # Capture stdout and stderr
-        stdout_capture = StringIO()
-        stderr_capture = StringIO()
+        # Read output in real-time
+        stdout_lines = []
+        stderr_lines = []
         
-        # Run the workflow using asyncio properly for thread execution
-        with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-            # Create new event loop for this thread
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                loop.run_until_complete(_async_run(Namespace(**args_dict)))
-            finally:
-                loop.close()
+        # Wait for process to complete and capture output
+        stdout, stderr = process.communicate()
         
         # Log captured output
-        stdout_content = stdout_capture.getvalue()
-        stderr_content = stderr_capture.getvalue()
+        if stdout:
+            logger.info(f"STDOUT:\n{stdout}")
+            stdout_lines = stdout.split('\n')
         
-        if stdout_content:
-            logger.info(f"STDOUT:\n{stdout_content}")
-        if stderr_content:
-            logger.error(f"STDERR:\n{stderr_content}")
+        if stderr:
+            logger.error(f"STDERR:\n{stderr}")
+            stderr_lines = stderr.split('\n')
         
-        logger.info(f"Workflow {workflow_id} completed successfully")
-        
-        # Update workflow status with thread safety
-        with workflow_lock:
-            running_workflows[workflow_id] = "completed"
+        # Check return code
+        if process.returncode == 0:
+            logger.info(f"Workflow {workflow_id} completed successfully")
+            with workflow_lock:
+                running_workflows[workflow_id] = "completed"
+        else:
+            logger.error(f"Workflow {workflow_id} failed with return code: {process.returncode}")
+            with workflow_lock:
+                running_workflows[workflow_id] = "failed"
         
     except Exception as e:
         if logger is None:
@@ -143,16 +130,6 @@ def run_workflow_with_logging(args_dict: dict, log_file_path: str, workflow_id: 
         with workflow_lock:
             running_workflows[workflow_id] = "failed"
     finally:
-        # Restore original environment variables
-        for key, value in original_env.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value
-        
-        # Restore original tempdir
-        tempfile.tempdir = old_tempdir if 'old_tempdir' in locals() else None
-        
         # Clean up handlers
         if logger:
             for handler in logger.handlers[:]:
@@ -328,11 +305,9 @@ def run(usr: str, project_name: str | None, files: list[UploadFile]) -> dict:
         print(f"saved file: {file_path}")
           
 
-    # create args and map it with tmp files
-    args: dict[str, str] = {}
-    args["name"] = ""
-    args["outdir"] = proj_path + "/output"
-    args["streamflow_file"] = proj_path + "/streamflow.yml"
+    # Create output directory
+    output_dir = proj_path + "/output"
+    os.makedirs(output_dir, exist_ok=True)
     
     # Generate unique workflow ID
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -349,10 +324,10 @@ def run(usr: str, project_name: str | None, files: list[UploadFile]) -> dict:
         running_workflows[workflow_id] = "running"
         workflow_logs[workflow_id] = log_file_path
     
-    # Start workflow in separate thread
+    # Start workflow in separate thread using subprocess
     thread = threading.Thread(
-        target=run_workflow_with_logging,
-        args=(args, log_file_path, workflow_id)
+        target=run_workflow_with_subprocess,
+        args=(proj_path, log_file_path, workflow_id)
     )
     thread.daemon = True
     thread.start()
