@@ -230,33 +230,87 @@ def get_default_project_file(project_name: str, file_path: str):
 
 @app.get("/default_projects/{project_name}/streamflow")
 def get_default_project_streamflow_as_json(project_name: str):
-    """Get streamflow.yml from a default project as JSON"""
+    """Get all project files with streamflow.yml converted to JSON"""
     # Sanitize the project name
     project_name = os.path.basename(project_name)
-    streamflow_path = os.path.join("./default_projects", project_name, "streamflow.yml")
+    project_path = os.path.join("./default_projects", project_name)
     
     # Security check: ensure the path is within the default_projects directory
     abs_projects_dir = os.path.abspath("./default_projects")
-    abs_streamflow_path = os.path.abspath(streamflow_path)
+    abs_project_path = os.path.abspath(project_path)
     
-    if not abs_streamflow_path.startswith(abs_projects_dir):
+    if not abs_project_path.startswith(abs_projects_dir):
         raise HTTPException(status_code=403, detail="Access denied: path traversal not allowed")
     
-    if not os.path.exists(streamflow_path) or not os.path.isfile(streamflow_path):
-        raise HTTPException(status_code=404, detail="streamflow.yml file not found")
+    if not os.path.exists(project_path) or not os.path.isdir(project_path):
+        raise HTTPException(status_code=404, detail="Project not found")
     
     try:
-        with open(streamflow_path, 'r', encoding='utf-8') as file:
-            yaml_content = yaml.safe_load(file)
+        project_files = {}
+        streamflow_config = None
+        
+        # Walk through all files in the project directory
+        for root, dirs, files in os.walk(project_path):
+            for filename in files:
+                file_path = os.path.join(root, filename)
+                relative_path = os.path.relpath(file_path, project_path)
+                # Normalize path separators for consistency
+                relative_path = relative_path.replace(os.sep, '/')
+                
+                try:
+                    # Handle YAML files
+                    if filename.endswith(('.yml', '.yaml')):
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = yaml.safe_load(f)
+                            project_files[relative_path] = {
+                                'type': 'yaml',
+                                'content': content
+                            }
+                            
+                            # Special handling for streamflow.yml
+                            if filename == 'streamflow.yml':
+                                streamflow_config = content
+                    
+                    # Handle text-based files (CWL, etc.)
+                    elif filename.endswith(('.cwl', '.txt', '.md', '.py', '.sh')):
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                            project_files[relative_path] = {
+                                'type': 'text',
+                                'content': content
+                            }
+                    
+                    # Handle other files as binary/text based on content
+                    else:
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                content = f.read()
+                                project_files[relative_path] = {
+                                    'type': 'text',
+                                    'content': content
+                                }
+                        except UnicodeDecodeError:
+                            # Binary file - skip or handle differently
+                            project_files[relative_path] = {
+                                'type': 'binary',
+                                'content': 'Binary file - not editable'
+                            }
+                
+                except Exception as e:
+                    # If we can't read a file, note the error
+                    project_files[relative_path] = {
+                        'type': 'error',
+                        'content': f'Error reading file: {str(e)}'
+                    }
         
         return {
             "project_name": project_name,
-            "streamflow_config": yaml_content
+            "streamflow_config": streamflow_config,
+            "project_files": project_files
         }
-    except yaml.YAMLError as e:
-        raise HTTPException(status_code=400, detail=f"Error parsing YAML file: {str(e)}")
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error reading streamflow.yml: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error reading project files: {str(e)}")
 
 @app.get("/default_projects/{project_name}/download")
 def download_default_project_archive(project_name: str):

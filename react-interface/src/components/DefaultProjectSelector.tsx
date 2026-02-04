@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { fetchDefaultProjects, getDefaultProjectStreamflow, executeModifiedConfig, type DefaultProject } from '../services/workflowService';
 
 interface DefaultProjectSelectorProps {
-  onProjectSelected?: (projectName: string, streamflowConfig: any) => void;
+  onProjectSelected?: (projectName: string, projectData: any) => void;
 }
 
 export const DefaultProjectSelector = ({ onProjectSelected }: DefaultProjectSelectorProps) => {
@@ -10,7 +10,7 @@ export const DefaultProjectSelector = ({ onProjectSelected }: DefaultProjectSele
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [streamflowConfig, setStreamflowConfig] = useState<any>(null);
+  const [projectData, setProjectData] = useState<any>(null);
   const [newProjectName, setNewProjectName] = useState<string>('');
   const [executing, setExecuting] = useState(false);
 
@@ -32,24 +32,30 @@ export const DefaultProjectSelector = ({ onProjectSelected }: DefaultProjectSele
   };
 
   const handleServiceChange = (stepIndex: number, newService: string) => {
-    if (!streamflowConfig) return;
+    if (!projectData?.streamflow_config) return;
 
-    const updatedConfig = { ...streamflowConfig };
-    if (updatedConfig.streamflow_config.workflows.master.bindings && 
-        updatedConfig.streamflow_config.workflows.master.bindings[stepIndex]) {
-      updatedConfig.streamflow_config.workflows.master.bindings[stepIndex].target.service = newService;
-      setStreamflowConfig(updatedConfig);
+    const updatedData = { ...projectData };
+    if (updatedData.streamflow_config.workflows?.master?.bindings && 
+        updatedData.streamflow_config.workflows.master.bindings[stepIndex]) {
+      updatedData.streamflow_config.workflows.master.bindings[stepIndex].target.service = newService;
+      
+      // Update the streamflow file in project_files as well
+      if (updatedData.project_files['streamflow.yml']) {
+        updatedData.project_files['streamflow.yml'].content = updatedData.streamflow_config;
+      }
+      
+      setProjectData(updatedData);
       
       // Notify parent component of the change
       if (onProjectSelected) {
-        onProjectSelected(selectedProject, updatedConfig);
+        onProjectSelected(selectedProject, updatedData);
       }
     }
   };
 
   const handleExecute = async () => {
-    if (!streamflowConfig || !newProjectName.trim()) {
-      setError('Please enter a project name and ensure configuration is loaded');
+    if (!projectData || !newProjectName.trim()) {
+      setError('Please enter a project name and ensure project data is loaded');
       return;
     }
 
@@ -57,7 +63,7 @@ export const DefaultProjectSelector = ({ onProjectSelected }: DefaultProjectSele
       setExecuting(true);
       setError(null);
       
-      const result = await executeModifiedConfig(newProjectName.trim(), streamflowConfig);
+      const result = await executeModifiedConfig(newProjectName.trim(), projectData);
       alert(`Successfully started workflow! Workflow ID: ${result.workflow_id}`);
       
     } catch (err) {
@@ -72,7 +78,7 @@ export const DefaultProjectSelector = ({ onProjectSelected }: DefaultProjectSele
   const handleProjectSelect = async (projectName: string) => {
     if (!projectName) {
       setSelectedProject('');
-      setStreamflowConfig(null);
+      setProjectData(null);
       setNewProjectName('');
       return;
     }
@@ -84,18 +90,18 @@ export const DefaultProjectSelector = ({ onProjectSelected }: DefaultProjectSele
       // Set default project name based on selected project
       setNewProjectName(`${projectName}-modified`);
       
-      // Fetch the streamflow configuration
-      const config = await getDefaultProjectStreamflow(projectName);
-      setStreamflowConfig(config);
+      // Fetch the complete project data
+      const data = await getDefaultProjectStreamflow(projectName);
+      setProjectData(data);
       
       // Notify parent component
       if (onProjectSelected) {
-        onProjectSelected(projectName, config);
+        onProjectSelected(projectName, data);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load project configuration');
       setSelectedProject('');
-      setStreamflowConfig(null);
+      setProjectData(null);
       setNewProjectName('');
     }
   };
@@ -152,13 +158,13 @@ export const DefaultProjectSelector = ({ onProjectSelected }: DefaultProjectSele
           <div className="mt-3">
             <h5>Project: {selectedProject}</h5>
             
-            {streamflowConfig && (
+            {projectData && (
               <div className="mt-3">
                 <h6>Workflow Steps Configuration:</h6>
-                {streamflowConfig.streamflow_config.workflows?.master?.bindings && (
+                {projectData.streamflow_config?.workflows?.master?.bindings && (
                   <div className="mb-3">
                     <div className="list-group">
-                      {streamflowConfig.streamflow_config.workflows.master.bindings.map((binding: any, index: number) => (
+                      {projectData.streamflow_config.workflows.master.bindings.map((binding: any, index: number) => (
                         <div key={index} className="list-group-item">
                           <div className="d-flex justify-content-between align-items-center">
                             <div>
@@ -221,14 +227,14 @@ export const DefaultProjectSelector = ({ onProjectSelected }: DefaultProjectSele
                     </div>
                   </div>
                   <small className="text-muted">
-                    This will create a new workflow with your modified service configurations.
+                    This will create a new workflow with your modified service configurations and all project files.
                   </small>
                 </div>
                 
                 <h6 className="mt-3">Raw Streamflow Configuration:</h6>
                 <div className="border rounded p-3" style={{ backgroundColor: '#f8f9fa', maxHeight: '400px', overflow: 'auto' }}>
                   <div style={{ fontSize: '0.875rem', fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                    {JSON.stringify(streamflowConfig.streamflow_config)}
+                    {JSON.stringify(projectData.streamflow_config)}
                   </div>
                 </div>
               </div>
@@ -237,13 +243,26 @@ export const DefaultProjectSelector = ({ onProjectSelected }: DefaultProjectSele
             <div className="mt-3">
               <h6>Project Files:</h6>
               <ul className="list-group">
-                {projects
-                  .find(p => p.name === selectedProject)
-                  ?.files.map((file, index) => (
+                {projectData ? (
+                  Object.keys(projectData.project_files).map((filePath, index) => (
                     <li key={index} className="list-group-item py-1">
-                      <small>{file}</small>
+                      <small>
+                        {filePath} 
+                        <span className="badge bg-secondary ms-2">
+                          {projectData.project_files[filePath].type}
+                        </span>
+                      </small>
                     </li>
-                  ))}
+                  ))
+                ) : (
+                  projects
+                    .find(p => p.name === selectedProject)
+                    ?.files.map((file, index) => (
+                      <li key={index} className="list-group-item py-1">
+                        <small>{file}</small>
+                      </li>
+                    ))
+                )}
               </ul>
             </div>
           </div>

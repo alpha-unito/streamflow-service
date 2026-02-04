@@ -153,6 +153,10 @@ export async function downloadDefaultProject(projectName: string): Promise<void>
 export interface DefaultProjectStreamflowResponse {
   project_name: string;
   streamflow_config: any;
+  project_files: Record<string, {
+    type: 'yaml' | 'text' | 'binary' | 'error';
+    content: any;
+  }>;
 }
 
 export async function getDefaultProjectStreamflow(projectName: string): Promise<DefaultProjectStreamflowResponse> {
@@ -165,22 +169,47 @@ export async function getDefaultProjectStreamflow(projectName: string): Promise<
   return response.json();
 }
 
-export async function executeModifiedConfig(projectName: string, streamflowConfig: any): Promise<any> {
+export async function executeModifiedConfig(projectName: string, projectData: DefaultProjectStreamflowResponse): Promise<any> {
   if (!currentUser) {
     throw new Error('No user set. Please set a user first.');
   }
 
-  // Convert the JSON config back to YAML using the YAML library
-  const doc = new YAML.Document();
-  doc.contents = streamflowConfig.streamflow_config;
-  const yamlString = doc.toString();
-
-  // Create a File object from the YAML string
-  const streamflowFile = new File([yamlString], 'streamflow.yml', { type: 'application/x-yaml' });
-  
-  // Create FormData and add the file
+  // Create FormData to send all files
   const formData = new FormData();
-  formData.append('files', streamflowFile);
+  
+  // Convert each file back to its original format
+  for (const [filePath, fileData] of Object.entries(projectData.project_files)) {
+    let fileContent: string;
+    
+    switch (fileData.type) {
+      case 'yaml':
+        // Convert YAML objects back to YAML string
+        const doc = new YAML.Document();
+        doc.contents = fileData.content;
+        fileContent = doc.toString();
+        break;
+      
+      case 'text':
+        // Text files remain as text
+        fileContent = fileData.content;
+        break;
+      
+      case 'binary':
+      case 'error':
+        // Skip binary files and error files
+        continue;
+      
+      default:
+        fileContent = String(fileData.content);
+    }
+    
+    // Create File object with the correct path structure
+    const file = new File([fileContent], filePath, { 
+      type: fileData.type === 'yaml' ? 'application/x-yaml' : 'text/plain' 
+    });
+    
+    formData.append('files', file);
+  }
   
   const response = await fetch(
     `${API_BASE_URL}/run/${currentUser}/${projectName}`,
