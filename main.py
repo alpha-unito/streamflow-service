@@ -13,6 +13,7 @@ from os.path import expanduser
 from typing import Dict, Any
 import zipfile
 import mimetypes
+import tempfile
 
 import yaml
 from model import *
@@ -226,6 +227,36 @@ def get_default_project_file(project_name: str, file_path: str):
         media_type=mime_type,
         filename=os.path.basename(file_path)
     )
+
+@app.get("/default_projects/{project_name}/streamflow")
+def get_default_project_streamflow_as_json(project_name: str):
+    """Get streamflow.yml from a default project as JSON"""
+    # Sanitize the project name
+    project_name = os.path.basename(project_name)
+    streamflow_path = os.path.join("./default_projects", project_name, "streamflow.yml")
+    
+    # Security check: ensure the path is within the default_projects directory
+    abs_projects_dir = os.path.abspath("./default_projects")
+    abs_streamflow_path = os.path.abspath(streamflow_path)
+    
+    if not abs_streamflow_path.startswith(abs_projects_dir):
+        raise HTTPException(status_code=403, detail="Access denied: path traversal not allowed")
+    
+    if not os.path.exists(streamflow_path) or not os.path.isfile(streamflow_path):
+        raise HTTPException(status_code=404, detail="streamflow.yml file not found")
+    
+    try:
+        with open(streamflow_path, 'r', encoding='utf-8') as file:
+            yaml_content = yaml.safe_load(file)
+        
+        return {
+            "project_name": project_name,
+            "streamflow_config": yaml_content
+        }
+    except yaml.YAMLError as e:
+        raise HTTPException(status_code=400, detail=f"Error parsing YAML file: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading streamflow.yml: {str(e)}")
 
 @app.get("/default_projects/{project_name}/download")
 def download_default_project_archive(project_name: str):

@@ -1,6 +1,7 @@
 // services/workflowService.ts
 import type { Workflow } from "../types/workflow"
 import type { WorkflowDetails } from "../types/workflowDetails"
+import * as YAML from 'yaml'
 
 const API_BASE_URL = "http://130.192.100.196:4646";
 
@@ -147,6 +148,53 @@ export async function downloadDefaultProject(projectName: string): Promise<void>
   // Cleanup
   document.body.removeChild(link);
   window.URL.revokeObjectURL(url);
+}
+
+export interface DefaultProjectStreamflowResponse {
+  project_name: string;
+  streamflow_config: any;
+}
+
+export async function getDefaultProjectStreamflow(projectName: string): Promise<DefaultProjectStreamflowResponse> {
+  const response = await fetch(`${API_BASE_URL}/default_projects/${projectName}/streamflow`);
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch project streamflow configuration');
+  }
+  
+  return response.json();
+}
+
+export async function executeModifiedConfig(projectName: string, streamflowConfig: any): Promise<any> {
+  if (!currentUser) {
+    throw new Error('No user set. Please set a user first.');
+  }
+
+  // Convert the JSON config back to YAML using the YAML library
+  const doc = new YAML.Document();
+  doc.contents = streamflowConfig.streamflow_config;
+  const yamlString = doc.toString();
+
+  // Create a File object from the YAML string
+  const streamflowFile = new File([yamlString], 'streamflow.yml', { type: 'application/x-yaml' });
+  
+  // Create FormData and add the file
+  const formData = new FormData();
+  formData.append('files', streamflowFile);
+  
+  const response = await fetch(
+    `${API_BASE_URL}/run/${currentUser}/${projectName}`,
+    { 
+      method: "POST",
+      body: formData
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to execute modified configuration");
+  }
+  
+  return await response.json();
 }
 
 // export async function getWorkflowLogs(logFilePath: string): Promise<string> {
