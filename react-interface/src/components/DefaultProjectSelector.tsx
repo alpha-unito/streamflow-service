@@ -5,6 +5,12 @@ interface DefaultProjectSelectorProps {
   onProjectSelected?: (projectName: string, projectData: any) => void;
 }
 
+const DEPLOYMENT_OPTIONS = [
+  { value: 'broadwell', label: 'broadwell' },
+  { value: 'cascadelake', label: 'cascadelake' },
+  { value: 'epito', label: 'epito' }
+] as const;
+
 export const DefaultProjectSelector = ({ onProjectSelected }: DefaultProjectSelectorProps) => {
   const [projects, setProjects] = useState<DefaultProject[]>([]);
   const [selectedProject, setSelectedProject] = useState<string>('');
@@ -15,7 +21,7 @@ export const DefaultProjectSelector = ({ onProjectSelected }: DefaultProjectSele
   const [executing, setExecuting] = useState(false);
 
   useEffect(() => {
-    loadDefaultProjects();
+    loadDefaultProjects();  
   }, []);
 
   const loadDefaultProjects = async () => {
@@ -31,13 +37,30 @@ export const DefaultProjectSelector = ({ onProjectSelected }: DefaultProjectSele
     }
   };
 
-  const handleServiceChange = (stepIndex: number, newService: string) => {
-    if (!projectData?.streamflow_config) return;
+  // Helper to get the first workflow with bindings
+  const getWorkflowBindings = () => {
+    if (!projectData?.streamflow_config?.workflows) return null;
+    
+    const workflows = projectData.streamflow_config.workflows;
+    const workflowName = Object.keys(workflows).find(name => workflows[name]?.bindings);
+    
+    return workflowName ? {
+      name: workflowName,
+      bindings: workflows[workflowName].bindings
+    } : null;
+  };
+
+  const handleDeploymentChange = (stepIndex: number, newDeployment: string) => {
+    if (!projectData?.streamflow_config?.workflows) return;
 
     const updatedData = { ...projectData };
-    if (updatedData.streamflow_config.workflows?.master?.bindings && 
-        updatedData.streamflow_config.workflows.master.bindings[stepIndex]) {
-      updatedData.streamflow_config.workflows.master.bindings[stepIndex].target.service = newService;
+    const workflows = updatedData.streamflow_config.workflows;
+    
+    // Find the first workflow with bindings
+    const workflowName = Object.keys(workflows).find(name => workflows[name]?.bindings);
+    
+    if (workflowName && workflows[workflowName].bindings[stepIndex]) {
+      workflows[workflowName].bindings[stepIndex].target.deployment = newDeployment;
       
       // Update the streamflow file in project_files as well
       if (updatedData.project_files['streamflow.yml']) {
@@ -161,10 +184,12 @@ export const DefaultProjectSelector = ({ onProjectSelected }: DefaultProjectSele
             {projectData && (
               <div className="mt-3">
                 <h6>Workflow Steps Configuration:</h6>
-                {projectData.streamflow_config?.workflows?.master?.bindings && (
-                  <div className="mb-3">
-                    <div className="list-group">
-                      {projectData.streamflow_config.workflows.master.bindings.map((binding: any, index: number) => (
+                {(() => {
+                  const workflowData = getWorkflowBindings();
+                  return workflowData?.bindings && (
+                    <div className="mb-3">
+                      <div className="list-group">
+                        {workflowData.bindings.map((binding: any, index: number) => (
                         <div key={index} className="list-group-item">
                           <div className="d-flex justify-content-between align-items-center">
                             <div>
@@ -174,24 +199,28 @@ export const DefaultProjectSelector = ({ onProjectSelected }: DefaultProjectSele
                               </p>
                             </div>
                             <div className="d-flex align-items-center">
-                              <label className="form-label me-2 mb-0">Service:</label>
+                              <label className="form-label me-2 mb-0">Deployment:</label>
                               <select 
                                 className="form-select form-select-sm"
-                                value={binding.target?.service || ''}
-                                onChange={(e) => handleServiceChange(index, e.target.value)}
+                                value={binding.target?.deployment || ''}
+                                onChange={(e) => handleDeploymentChange(index, e.target.value)}
                                 style={{ width: 'auto', minWidth: '120px' }}
                               >
-                                <option value="">Select service</option>
-                                <option value="broadwell">broadwell</option>
-                                <option value="cascadelake">cascadelake</option>
+                                <option value="">Select deployment</option>
+                                {DEPLOYMENT_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
                               </select>
                             </div>
                           </div>
                         </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
                 
                 {/* Execution Form */}
                 <div className="mt-4 p-3 border rounded" style={{ backgroundColor: '#f0f8ff' }}>
@@ -227,7 +256,7 @@ export const DefaultProjectSelector = ({ onProjectSelected }: DefaultProjectSele
                     </div>
                   </div>
                   <small className="text-muted">
-                    This will create a new workflow with your modified service configurations and all project files.
+                    This will create a new workflow with your modified deployment configurations and all project files.
                   </small>
                 </div>
                 
