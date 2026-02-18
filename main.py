@@ -346,10 +346,6 @@ def download_default_project_archive(project_name: str):
 
 # ----------------------------------------
 
-def checkFileValidity(file_n : str | None) :
-    return file_n is None or not (file_n.endswith(".yml") or file_n.endswith(".yaml") or file_n.endswith(".cwl"))
-     # TODO: check if necessary or how to do it proprerly
-
 # streamflow run with args post 
 @app.post("/run/{usr}/{project_name}")
 def run(usr: str, project_name: str | None, files: list[UploadFile]) -> dict:
@@ -357,10 +353,7 @@ def run(usr: str, project_name: str | None, files: list[UploadFile]) -> dict:
     if files.__len__() < 1:
         raise HTTPException(status_code=400, detail="At least one file is required")
     
-    # Validate files
-    for elem in files:
-        if checkFileValidity(elem.filename):
-            raise HTTPException(status_code=400, detail=f"{elem.filename} must be a .yml, .yaml or .cwl")
+    #TODO: validate files
         
     # save tmp dir // creates temporary directory
     proj_path = getDefaultProjectDir(usr, project_name)
