@@ -1,40 +1,38 @@
 // components/WorkflowList.tsx
 import { useEffect, useState } from "react";
-import type { Workflow } from "../types/workflow";
-import { fetchWorkflows } from "../services/workflowService";
+import type { DefaultProject } from "../services/workflowService";
+import { fetchDefaultProjects } from "../services/workflowService";
 
 interface WorkflowListProps {
-  onSelectWorkflow: (workflow: Workflow) => void;
+  onSelectWorkflow: (project: DefaultProject) => void;
   selectedWorkflowId?: string;
 }
 
 export function WorkflowList({ onSelectWorkflow }: WorkflowListProps) {
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [projects, setProjects] = useState<DefaultProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchWorkflows()
-      .then(setWorkflows)
+    fetchDefaultProjects()
+      .then((response) => setProjects(response.projects))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <p>Loading workflows...</p>;
+  if (loading) return <p>Loading projects...</p>;
   if (error) return <p>Error: {error}</p>;
 
   return (
     <div className="container-md w-75 d-flex flex-column gap-2 m-auto p-3">
-      {workflows.map((workflow) => (
+      {projects.map((project) => (
         <button
-          key={workflow.name}
+          key={project.name}
           className="btn btn-outline-primary text-start w-100"
-          onClick={() => onSelectWorkflow(workflow)}
+          onClick={() => onSelectWorkflow(project)}
         >
-          <div className="fw-bold">{workflow.name}</div>
-          {workflow.description && (
-            <small className="text-muted">{workflow.description}</small>
-          )}
+          <div className="fw-bold">{project.name}</div>
+          <small className="text-muted">{project.files.length} files</small>
         </button>
       ))}
     </div>

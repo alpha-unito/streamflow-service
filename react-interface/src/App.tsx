@@ -1,20 +1,18 @@
 // App.tsx
 import { useState } from 'react'
 import './App.css'
-import type { Workflow } from "./types/workflow";
+import type { DefaultProject } from "./services/workflowService";
 import { WorkflowList } from './components/WorkflowList.tsx'
 import { WorkflowDetails } from "./components/WorkflowDetails"
 import { WorkflowForm } from './components/WorkflowForm.tsx'
-import { DefaultProjectDownloader } from './components/DefaultProjectDownloader.tsx'
-import { DefaultProjectSelector } from './components/DefaultProjectSelector.tsx'
+// import { DefaultProjectDownloader } from './components/DefaultProjectDownloader.tsx'
 import { executeExampleWorkflow, uploadAndRunWorkflow, setCurrentUser } from './services/workflowService.ts';
 
 
 function App() {
-  const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null> (null)
+  const [selectedWorkflow, setSelectedWorkflow] = useState<DefaultProject | null> (null)
   const [username, setUsername] = useState<string | null>(null)
-  const [selectedProjectConfig, setSelectedProjectConfig] = useState<any>(null)
-  const listTitle = selectedWorkflow ? selectedWorkflow.name : "Available Workflows"
+  const listTitle = selectedWorkflow ? selectedWorkflow.name : "Available Projects"
   const handleBackToList = () => {setSelectedWorkflow(null);}
   
   // Example run handler
@@ -35,14 +33,6 @@ function App() {
       alert("Error uploading workflow: " + error);
       throw error; // Re-throw to allow form to handle the error state
     }
-  };
-
-  // Handle default project selection
-  const handleProjectSelection = (projectName: string, streamflowConfig: any) => {
-    setSelectedProjectConfig({
-      projectName,
-      ...streamflowConfig
-    });
   };
 
   const handleUsernameSubmit = (event: React.FormEvent) => {
@@ -82,28 +72,15 @@ function App() {
         </div>
         <h1>{listTitle}</h1>
         
-        {/* Selected Project Config Display */}
-        {selectedProjectConfig && !selectedWorkflow && (
-          <div className="alert alert-info mb-4">
-            <strong>Selected Project:</strong> {selectedProjectConfig.projectName}
-          </div>
-        )}
-        
-        {/* Default Projects Selector - only show when not viewing workflow details */}
-        {!selectedWorkflow && <DefaultProjectSelector onProjectSelected={handleProjectSelection} />}
-        
-        {/* Default Projects Downloader - only show when not viewing workflow details */}
-        {!selectedWorkflow && <DefaultProjectDownloader />}
-        
-        {/* Upload Form - only show when not viewing workflow details */}
-        {!selectedWorkflow && <WorkflowForm onSubmit={handleUploadAndRun} />}
-        
         {/* Content */}
         {selectedWorkflow ? (
           <WorkflowDetails workflow={selectedWorkflow} />
         ) : (
           <WorkflowList onSelectWorkflow={setSelectedWorkflow}/>
         )} 
+
+        {/* Upload Form - only show when not viewing workflow details */}
+        {!selectedWorkflow && <WorkflowForm onSubmit={handleUploadAndRun} />}
       
       </div>
     </div>
