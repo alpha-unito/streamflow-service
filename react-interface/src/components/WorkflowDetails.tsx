@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react"
 import type { DefaultProject, DefaultProjectStreamflowResponse } from "../services/workflowService"
 import { getDefaultProjectStreamflow, executeModifiedConfig as execModifiedConfig } from "../services/workflowService"
+import { WorkflowStatus } from "./WorkflowStatus"
 
 const DEPLOYMENT_OPTIONS = [
   { value: 'broadwell', label: 'broadwell' },
@@ -19,10 +20,12 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
   const [executing, setExecuting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [newProjectName, setNewProjectName] = useState<string>('')
+  const [executionResult, setExecutionResult] = useState<{ workflow_id: string; status: string } | null>(null)
 
   useEffect(() => {
     setLoading(true)
     setError(null)
+    setExecutionResult(null)
     setNewProjectName(`${workflow.name}-modified`)
 
     getDefaultProjectStreamflow(workflow.name)
@@ -76,7 +79,10 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
       setError(null);
       
       const result = await execModifiedConfig(newProjectName.trim(), projectData);
-      alert(`Successfully started workflow! Workflow ID: ${result.workflow_id}`);
+      setExecutionResult({
+        workflow_id: result.workflow_id,
+        status: result.status
+      });
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to execute workflow';
@@ -87,9 +93,27 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
     }
   };
 
+  const handleCloseStatus = () => {
+    setExecutionResult(null);
+  };
+
   if (loading) return <p>Select a project to see details...</p>
   if (error) return <p className="text-danger">{error}</p>
   if (!projectData) return null
+
+  // If execution result is available, show the status component
+  if (executionResult) {
+    return (
+      <div>
+        <h3>{workflow.name}</h3>
+        <WorkflowStatus 
+          workflowId={executionResult.workflow_id} 
+          projectName={newProjectName}
+          onClose={handleCloseStatus}
+        />
+      </div>
+    )
+  }
 
   const workflowData = getWorkflowBindings();
 
@@ -191,15 +215,15 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
             </small>
           </div>
 
-          {/* Raw Configuration */}
-          <div className="mt-4">
+          {/* Raw streamflow in json*/}
+          {/* <div className="mt-4">
             <h5>Raw Streamflow Configuration:</h5>
             <div className="border rounded p-3" style={{ backgroundColor: '#f8f9fa', maxHeight: '400px', overflow: 'auto' }}>
-              <div style={{ fontSize: '0.875rem', fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+              <div style={{ fontSize: '0.875rem', fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all', textAlign: 'left' }}>
                 {JSON.stringify(projectData.streamflow_config, null, 2)}
               </div>
             </div>
-          </div>
+          </div> */}
         </div>
       </div>
     </div>

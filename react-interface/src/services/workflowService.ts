@@ -104,6 +104,28 @@ export async function getRunningWorkflows(): Promise<any> {
   return await response.json();
 }
 
+export async function getWorkflowLogContent(username: string, projectName: string, logFilename: string): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/workflow_logs_content/${username}/${projectName}/${logFilename}`);
+  
+  if (!response.ok) {
+    throw new Error("Failed to fetch log content");
+  }
+  
+  const data = await response.json();
+  return data.content;
+}
+
+export function getWorkflowLogUrl(username: string, projectName: string, logFilename: string): string {
+  return `${API_BASE_URL}/workflow_logs/${username}/${projectName}/${logFilename}`;
+}
+
+export function parseLogPath(logPath: string): { filename: string } | null {
+  if (!logPath) return null;
+  
+  const filename = logPath.split('/').pop();
+  return filename ? { filename } : null;
+}
+
 // Default Projects API functions
 export interface DefaultProject {
   name: string;

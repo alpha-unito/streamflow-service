@@ -40,7 +40,7 @@ def get_custom_tmpdir():
     return custom_tmpdir
 
 def setup_logging(log_file_path: str):
-    """Setup logging to file"""
+    """Setup logging to file with immediate flushing"""
     logger = logging.getLogger(f'workflow_{os.getpid()}_{threading.get_ident()}')
     logger.setLevel(logging.INFO)
     
@@ -48,13 +48,20 @@ def setup_logging(log_file_path: str):
     for handler in logger.handlers[:]:
         logger.removeHandler(handler)
     
-    # Create file handler
-    file_handler = logging.FileHandler(log_file_path)
+    # Create file handler with immediate flushing
+    file_handler = logging.FileHandler(log_file_path, mode='a')
     file_handler.setLevel(logging.INFO)
     
     # Create formatter
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     file_handler.setFormatter(formatter)
+    
+    # Enable auto-flush for immediate writes
+    try:
+        file_handler.stream.reconfigure(line_buffering=True)
+    except AttributeError:
+        # Fallback for older Python versions
+        pass
     
     # Add handler to logger
     logger.addHandler(file_handler)
@@ -90,35 +97,36 @@ def run_workflow_with_subprocess(project_path: str, log_file_path: str, workflow
             cwd=project_path,
             env=env,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # Merge stderr into stdout for real-time logging
             text=True,
             bufsize=1,
             universal_newlines=True
         )
         
-        # Read output in real-time
-        stdout_lines = []
-        stderr_lines = []
+        # Read output in real-time line by line
+        while True:
+            output = process.stdout.readline()
+            if output == '' and process.poll() is not None:
+                break
+            if output:
+                # Log each line as it comes
+                logger.info(output.rstrip())
+                
+                # Flush the log file to ensure immediate write
+                for handler in logger.handlers:
+                    if hasattr(handler, 'flush'):
+                        handler.flush()
         
-        # Wait for process to complete and capture output
-        stdout, stderr = process.communicate()
-        
-        # Log captured output
-        if stdout:
-            logger.info(f"STDOUT:\n{stdout}")
-            stdout_lines = stdout.split('\n')
-        
-        if stderr:
-            logger.error(f"STDERR:\n{stderr}")
-            stderr_lines = stderr.split('\n')
+        # Get final return code
+        return_code = process.returncode
         
         # Check return code
-        if process.returncode == 0:
+        if return_code == 0:
             logger.info(f"Workflow {workflow_id} completed successfully")
             with workflow_lock:
                 running_workflows[workflow_id] = "completed"
         else:
-            logger.error(f"Workflow {workflow_id} failed with return code: {process.returncode}")
+            logger.error(f"Workflow {workflow_id} failed with return code: {return_code}")
             with workflow_lock:
                 running_workflows[workflow_id] = "failed"
         
@@ -152,12 +160,26 @@ def get_running_workflows():
         "workflow_logs": workflow_logs
     }
 
-@app.get("/workflow_logs/{usr}/{log_filename}")
-def get_workflow_log_file(usr: str, log_filename: str):
+@app.get("/workflow_logs/{usr}/{project_name}/{log_filename}")
+def get_workflow_log_file(usr: str, project_name: str, log_filename: str):
     """Serve log files"""
-    log_file_path = f"./usrs_dir/{usr}/logs/{log_filename}"
+    log_file_path = f"./usrs_dir/{usr}/{project_name}/logs/{log_filename}"
     if os.path.exists(log_file_path):
         return FileResponse(log_file_path, media_type="text/plain")
+    else:
+        raise HTTPException(status_code=404, detail="Log file not found")
+
+@app.get("/workflow_logs_content/{usr}/{project_name}/{log_filename}")
+def get_workflow_log_content(usr: str, project_name: str, log_filename: str):
+    """Get log file content as text for parsing"""
+    log_file_path = f"./usrs_dir/{usr}/{project_name}/logs/{log_filename}"
+    if os.path.exists(log_file_path):
+        try:
+            with open(log_file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return {"content": content}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error reading log file: {str(e)}")
     else:
         raise HTTPException(status_code=404, detail="Log file not found")
 
