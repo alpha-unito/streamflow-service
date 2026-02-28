@@ -78,22 +78,6 @@ export async function uploadAndRunWorkflow(files: File[], projectName: string): 
   return await response.json();
 }
 
-export async function executeExampleWorkflow(workflowName: string): Promise<any> {
-  
-  const response = await fetch(
-    `${API_BASE_URL}/example_run/${workflowName}/${currentUser}`,
-    { method: "GET" }
-  )
-  if (!response.ok) {
-    alert("Example run failed: " + response.statusText);
-    throw new Error("Failed to start example workflow");
-  } else {
-    const result = await response.json();
-    alert(`Example workflow started! Workflow ID: ${result.workflow_id}`);
-    return result;
-  }
-}
-
 export async function getRunningWorkflows(): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/running_workflows`);
   
