@@ -408,39 +408,60 @@ export function WorkflowStatus({ workflowId, projectName, onClose }: WorkflowSta
         </div>
         <div className="card-body">
           <div className="list-group list-group-flush">
-            {steps.map((step, index) => (
-              <div key={index} className="list-group-item px-0">
-                <div className="d-flex align-items-center">
-                  <span className={`me-3 ${getStatusColor(step.status)}`} style={{ fontSize: '1.2em' }}>
-                    {getStatusIcon(step.status)}
-                  </span>
-                  <span className={`${getStatusColor(step.status)}`}>
-                    <strong>{step.name}</strong>
-                    {step.status === 'running' && (
-                      <span className="spinner-border spinner-border-sm ms-2" role="status"></span>
-                    )}
-                  </span>
+            {steps.map((step, index) => {
+              // Get relevant detailed steps for this main phase
+              let relevantDetailedSteps: WorkflowStep[] = []
+              
+              if (index === 2) { // Deploying Environments
+                relevantDetailedSteps = detailedSteps.filter(detailStep => 
+                  detailStep.stepId?.startsWith('deploy_') && !detailStep.stepId.startsWith('deploy_undeploy_')
+                )
+              } else if (index === 3) { // Executing Steps
+                relevantDetailedSteps = detailedSteps.filter(detailStep => 
+                  detailStep.stepId && !detailStep.stepId.startsWith('deploy_') && !detailStep.stepId.startsWith('undeploy_')
+                )
+              } else if (index === 4) { // Cleanup & Results
+                relevantDetailedSteps = detailedSteps.filter(detailStep => 
+                  detailStep.stepId?.startsWith('undeploy_')
+                )
+              }
+
+              return (
+                <div key={index}>
+                  <div className="list-group-item px-0">
+                    <div className="d-flex align-items-center">
+                      <span className={`me-3 ${getStatusColor(step.status)}`} style={{ fontSize: '1.2em' }}>
+                        {getStatusIcon(step.status)}
+                      </span>
+                      <span className={`${getStatusColor(step.status)}`}>
+                        <strong>{step.name}</strong>
+                        {step.status === 'running' && (
+                          <span className="spinner-border spinner-border-sm ms-2" role="status"></span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Show detailed steps for this phase if available */}
+                  {relevantDetailedSteps.length > 0 && relevantDetailedSteps.map((detailStep, detailIndex) => (
+                    <div key={`detailed-${index}-${detailIndex}`} className="list-group-item px-0 py-1" style={{ backgroundColor: '#f8f9fa' }}>
+                      <div className="d-flex align-items-center">
+                        <span className="me-3" style={{ width: '1.2em' }}></span>
+                        <span className={`me-2 ${getStatusColor(detailStep.status)}`} style={{ fontSize: '1em' }}>
+                          {getStatusIcon(detailStep.status)}
+                        </span>
+                        <span className={`${getStatusColor(detailStep.status)}`} style={{ fontSize: '0.9em' }}>
+                          {detailStep.name}
+                          {detailStep.status === 'running' && (
+                            <span className="spinner-border spinner-border-sm ms-2" role="status" style={{ width: '0.8rem', height: '0.8rem' }}></span>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            ))}
-            
-            {/* Show detailed steps if available */}
-            {detailedSteps.length > 0 && detailedSteps.map((step, index) => (
-              <div key={`detailed-${index}`} className="list-group-item px-0 py-1" style={{ backgroundColor: '#f8f9fa' }}>
-                <div className="d-flex align-items-center">
-                  <span className="me-3" style={{ width: '1.2em' }}></span>
-                  <span className={`me-2 ${getStatusColor(step.status)}`} style={{ fontSize: '1em' }}>
-                    {getStatusIcon(step.status)}
-                  </span>
-                  <span className={`${getStatusColor(step.status)}`} style={{ fontSize: '0.9em' }}>
-                    {step.name}
-                    {step.status === 'running' && (
-                      <span className="spinner-border spinner-border-sm ms-2" role="status" style={{ width: '0.8rem', height: '0.8rem' }}></span>
-                    )}
-                  </span>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </div>
