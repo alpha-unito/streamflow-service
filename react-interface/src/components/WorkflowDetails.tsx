@@ -1,7 +1,9 @@
 // components/WorkflowDetails.tsx
 import { useEffect, useState } from "react"
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { DefaultProject, DefaultProjectStreamflowResponse } from "../services/workflowService"
-import { getDefaultProjectStreamflow, executeModifiedConfig as execModifiedConfig } from "../services/workflowService"
+import { getDefaultProjectStreamflow, executeModifiedConfig as execModifiedConfig, getDefaultProjectImageUrl, getDefaultProjectDescription } from "../services/workflowService"
 import { WorkflowStatus } from "./WorkflowStatus"
 
 const DEPLOYMENT_OPTIONS = [
@@ -21,17 +23,49 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
   const [error, setError] = useState<string | null>(null)
   const [newProjectName, setNewProjectName] = useState<string>('')
   const [executionResult, setExecutionResult] = useState<{ workflow_id: string; status: string } | null>(null)
+  const [description, setDescription] = useState<{ content: string; filename: string } | null>(null)
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const [imageError, setImageError] = useState<boolean>(false)
+  const [descriptionError, setDescriptionError] = useState<string | null>(null)
 
   useEffect(() => {
     setLoading(true)
     setError(null)
     setExecutionResult(null)
     setNewProjectName(`${workflow.name}-modified`)
+    setImageError(false)
+    setDescriptionError(null)
 
-    getDefaultProjectStreamflow(workflow.name)
-      .then(setProjectData)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false))
+    // Set image URL
+    setImageUrl(getDefaultProjectImageUrl(workflow.name))
+
+    // Fetch project streamflow data
+    const fetchData = async () => {
+      try {
+        const [streamflowData, descriptionData] = await Promise.all([
+          getDefaultProjectStreamflow(workflow.name),
+          getDefaultProjectDescription(workflow.name)
+        ])
+        
+        setProjectData(streamflowData)
+        setDescription(descriptionData)
+      } catch (err) {
+        if (err instanceof Error) {
+          // If only description fails, still show the project data
+          try {
+            const streamflowData = await getDefaultProjectStreamflow(workflow.name)
+            setProjectData(streamflowData)
+            setDescriptionError(err.message)
+          } catch (streamflowErr) {
+            setError(streamflowErr instanceof Error ? streamflowErr.message : 'Failed to load project data')
+          }
+        }
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
   }, [workflow.name])
 
   // Helper to get the first workflow with bindings
@@ -97,6 +131,10 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
     setExecutionResult(null);
   };
 
+  const handleImageError = () => {
+    setImageError(true);
+  };
+
   if (loading) return <p>Select a project to see details...</p>
   if (error) return <p className="text-danger">{error}</p>
   if (!projectData) return null
@@ -123,6 +161,53 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
         <div className="col-12">
           <h3>{workflow.name}</h3>
           
+          {/* Workflow Overview Section */}
+          <div className="mb-4">
+            <h5>Workflow Overview</h5>
+            <div className="row">
+              {/* Workflow Image */}
+              <div className="col-md-6">
+                <div className="border rounded p-3" style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {imageError ? (
+                    <div className="text-muted text-center">
+                      <div style={{ fontSize: '3rem' }}>📊</div>
+                      <p>No workflow diagram available</p>
+                    </div>
+                  ) : (
+                    <img 
+                      src={imageUrl || ''} 
+                      alt={`${workflow.name} workflow diagram`}
+                      style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                      onError={handleImageError}
+                    />
+                  )}
+                </div>
+              </div>
+              
+              {/* Workflow Description */}
+              <div className="col-md-6">
+                <div className="border rounded p-3" style={{ height: '400px', overflow: 'auto' }}>
+                  {descriptionError ? (
+                    <div className="text-muted">
+                      <p>Failed to load description: {descriptionError}</p>
+                      <p>No description available for this workflow.</p>
+                    </div>
+                  ) : description ? (
+                    <div className="markdown-content">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {description.content}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    <div className="text-muted">
+                      <p>Loading description...</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Project Files */}
           <div className="mb-4">
             <h5>Project Files:</h5>

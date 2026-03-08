@@ -160,7 +160,7 @@ export interface DefaultProjectStreamflowResponse {
   project_name: string;
   streamflow_config: any;
   project_files: Record<string, {
-    type: 'yaml' | 'text' | 'binary' | 'error';
+    type: 'yaml' | 'text' | 'cwl' | 'binary' | 'error' | 'script';
     content: any;
   }>;
 }
@@ -170,6 +170,20 @@ export async function getDefaultProjectStreamflow(projectName: string): Promise<
   
   if (!response.ok) {
     throw new Error('Failed to fetch project streamflow configuration');
+  }
+  
+  return response.json();
+}
+
+export function getDefaultProjectImageUrl(projectName: string): string {
+  return `${API_BASE_URL}/default_projects/${projectName}/image`;
+}
+
+export async function getDefaultProjectDescription(projectName: string): Promise<{ content: string; filename: string }> {
+  const response = await fetch(`${API_BASE_URL}/default_projects/${projectName}/description`);
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch project description');
   }
   
   return response.json();

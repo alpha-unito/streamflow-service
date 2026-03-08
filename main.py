@@ -250,6 +250,100 @@ def get_default_project_file(project_name: str, file_path: str):
         filename=os.path.basename(file_path)
     )
 
+@app.get("/default_projects/{project_name}/image")
+def get_default_project_image(project_name: str):
+    """Get workflow diagram image for a default project"""
+    # Sanitize the project name
+    project_name = os.path.basename(project_name)
+    project_path = os.path.join("./default_projects", project_name)
+    
+    # Security check: ensure the path is within the default_projects directory
+    abs_projects_dir = os.path.abspath("./default_projects")
+    abs_project_path = os.path.abspath(project_path)
+    
+    if not abs_project_path.startswith(abs_projects_dir):
+        raise HTTPException(status_code=403, detail="Access denied: path traversal not allowed")
+    
+    if not os.path.exists(project_path) or not os.path.isdir(project_path):
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Look for common image file extensions
+    image_extensions = ['.png', '.jpg', '.jpeg', '.svg', '.gif']
+    image_files = []
+    
+    for root, dirs, files in os.walk(project_path):
+        for file in files:
+            if any(file.lower().endswith(ext) for ext in image_extensions):
+                # Prioritize files with 'workflow', 'diagram', or 'flow' in the name
+                if any(keyword in file.lower() for keyword in ['workflow', 'diagram', 'graph', 'flow', 'pipeline']):
+                    image_files.insert(0, os.path.join(root, file))
+                else:
+                    image_files.append(os.path.join(root, file))
+    
+    if not image_files:
+        raise HTTPException(status_code=404, detail="No workflow image found")
+    
+    # Return the first (prioritized) image
+    image_path = image_files[0]
+    
+    # Determine MIME type
+    mime_type, _ = mimetypes.guess_type(image_path)
+    if mime_type is None:
+        mime_type = "application/octet-stream"
+    
+    return FileResponse(
+        path=image_path,
+        media_type=mime_type,
+        filename=os.path.basename(image_path)
+    )
+
+@app.get("/default_projects/{project_name}/description")
+def get_default_project_description(project_name: str):
+    """Get workflow description (README) for a default project"""
+    # Sanitize the project name
+    project_name = os.path.basename(project_name)
+    project_path = os.path.join("./default_projects", project_name)
+    
+    # Security check: ensure the path is within the default_projects directory
+    abs_projects_dir = os.path.abspath("./default_projects")
+    abs_project_path = os.path.abspath(project_path)
+    
+    if not abs_project_path.startswith(abs_projects_dir):
+        raise HTTPException(status_code=403, detail="Access denied: path traversal not allowed")
+    
+    if not os.path.exists(project_path) or not os.path.isdir(project_path):
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Look for README files
+    readme_files = []
+    readme_names = ['readme.md', 'readme.txt', 'readme', 'description.md']
+    
+    for root, dirs, files in os.walk(project_path):
+        for file in files:
+            if file.lower() in readme_names:
+                readme_files.append(os.path.join(root, file))
+    
+    if not readme_files:
+        # Return a default description if no README found
+        return {
+            "content": f"# {project_name}\n\nNo description available for this workflow.",
+            "filename": "generated"
+        }
+    
+    # Use the first README file found
+    readme_path = readme_files[0]
+    
+    try:
+        with open(readme_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        return {
+            "content": content,
+            "filename": os.path.basename(readme_path)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading description file: {str(e)}")
+
 @app.get("/default_projects/{project_name}/streamflow")
 def get_default_project_streamflow_as_json(project_name: str):
     """Get all project files with streamflow.yml converted to JSON"""
@@ -293,8 +387,26 @@ def get_default_project_streamflow_as_json(project_name: str):
                             if filename == 'streamflow.yml':
                                 streamflow_config = content
                     
-                    # Handle text-based files (CWL, etc.)
-                    elif filename.endswith(('.cwl', '.txt', '.md', '.py', '.sh')):
+                    # Handle cwl files (CWL)
+                    elif filename.endswith(('.cwl')):
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                            project_files[relative_path] = {
+                                'type': 'cwl',
+                                'content': content
+                            }
+
+                    # Handle script files (.py and sh)
+                    elif filename.endswith(('.py', '.sh')):
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                            project_files[relative_path] = {
+                                'type': 'script',
+                                'content': content
+                            }
+                    
+                    # Handle text-based files (txt and md)
+                    elif filename.endswith(('.txt', '.md')):
                         with open(file_path, 'r', encoding='utf-8') as f:
                             content = f.read()
                             project_files[relative_path] = {
@@ -333,6 +445,100 @@ def get_default_project_streamflow_as_json(project_name: str):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reading project files: {str(e)}")
+
+@app.get("/default_projects/{project_name}/image")
+def get_default_project_image(project_name: str):
+    """Get workflow diagram image for a default project"""
+    # Sanitize the project name
+    project_name = os.path.basename(project_name)
+    project_path = os.path.join("./default_projects", project_name)
+    
+    # Security check: ensure the path is within the default_projects directory
+    abs_projects_dir = os.path.abspath("./default_projects")
+    abs_project_path = os.path.abspath(project_path)
+    
+    if not abs_project_path.startswith(abs_projects_dir):
+        raise HTTPException(status_code=403, detail="Access denied: path traversal not allowed")
+    
+    if not os.path.exists(project_path) or not os.path.isdir(project_path):
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Look for common image file extensions
+    image_extensions = ['.png', '.jpg', '.jpeg', '.svg', '.gif']
+    image_files = []
+    
+    for root, dirs, files in os.walk(project_path):
+        for file in files:
+            if any(file.lower().endswith(ext) for ext in image_extensions):
+                # Prioritize files with 'workflow', 'diagram', or 'flow' in the name
+                if any(keyword in file.lower() for keyword in ['workflow', 'diagram', 'flow', 'pipeline']):
+                    image_files.insert(0, os.path.join(root, file))
+                else:
+                    image_files.append(os.path.join(root, file))
+    
+    if not image_files:
+        raise HTTPException(status_code=404, detail="No workflow image found")
+    
+    # Return the first (prioritized) image
+    image_path = image_files[0]
+    
+    # Determine MIME type
+    mime_type, _ = mimetypes.guess_type(image_path)
+    if mime_type is None:
+        mime_type = "application/octet-stream"
+    
+    return FileResponse(
+        path=image_path,
+        media_type=mime_type,
+        filename=os.path.basename(image_path)
+    )
+
+@app.get("/default_projects/{project_name}/description")
+def get_default_project_description(project_name: str):
+    """Get workflow description (README) for a default project"""
+    # Sanitize the project name
+    project_name = os.path.basename(project_name)
+    project_path = os.path.join("./default_projects", project_name)
+    
+    # Security check: ensure the path is within the default_projects directory
+    abs_projects_dir = os.path.abspath("./default_projects")
+    abs_project_path = os.path.abspath(project_path)
+    
+    if not abs_project_path.startswith(abs_projects_dir):
+        raise HTTPException(status_code=403, detail="Access denied: path traversal not allowed")
+    
+    if not os.path.exists(project_path) or not os.path.isdir(project_path):
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Look for README files
+    readme_files = []
+    readme_names = ['readme.md', 'readme.txt', 'readme', 'description.md']
+    
+    for root, dirs, files in os.walk(project_path):
+        for file in files:
+            if file.lower() in readme_names:
+                readme_files.append(os.path.join(root, file))
+    
+    if not readme_files:
+        # Return a default description if no README found
+        return {
+            "content": f"# {project_name}\n\nNo description available for this workflow.",
+            "filename": "generated"
+        }
+    
+    # Use the first README file found
+    readme_path = readme_files[0]
+    
+    try:
+        with open(readme_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        return {
+            "content": content,
+            "filename": os.path.basename(readme_path)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading description file: {str(e)}")
 
 @app.get("/default_projects/{project_name}/download")
 def download_default_project_archive(project_name: str):
