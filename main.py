@@ -2,648 +2,448 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-# import for streamflow run
-
-import os
-import threading
+import asyncio
 import logging
-import subprocess
+import mimetypes
+import os
+import tempfile
+import zipfile
 from datetime import datetime
 from os.path import expanduser
-from typing import Dict, Any
-import zipfile
-import mimetypes
-import tempfile
 
 import yaml
 from model import *
+
+# ---------------------------------------------------------------------------
+# App setup
+# ---------------------------------------------------------------------------
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Replace with the specific origin(s) you want to allow
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
-# Global dictionary to track running workflows
-running_workflows = {}
-workflow_logs = {}
-workflow_lock = threading.Lock()
+logger = logging.getLogger(__name__)
 
-def get_custom_tmpdir():
-    """Get custom temporary directory for streamflow"""
+# Global dictionary to track running workflows
+# No lock needed: asyncio is single-threaded, dicts are only mutated at non-await points.
+running_workflows: dict[str, str] = {}
+workflow_logs: dict[str, str] = {}
+
+DEFAULT_PROJECTS_DIR = "./default_projects"
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _get_custom_tmpdir() -> str:
+    """Get custom temporary directory for streamflow."""
     custom_tmpdir = os.path.join(expanduser("~"), "tmp")
     os.makedirs(custom_tmpdir, exist_ok=True)
     return custom_tmpdir
 
-def setup_logging(log_file_path: str):
-    """Setup logging to file with immediate flushing"""
-    logger = logging.getLogger(f'workflow_{os.getpid()}_{threading.get_ident()}')
-    logger.setLevel(logging.INFO)
-    
+
+def _setup_file_logger(log_file_path: str, workflow_id: str) -> logging.Logger:
+    """Return a logger that writes to *log_file_path* with line-buffering."""
+    wf_logger = logging.getLogger(f"workflow_{workflow_id}")
+    wf_logger.setLevel(logging.INFO)
+
     # Remove any existing handlers
-    for handler in logger.handlers[:]:
-        logger.removeHandler(handler)
-    
-    # Create file handler with immediate flushing
-    file_handler = logging.FileHandler(log_file_path, mode='a')
+    for handler in wf_logger.handlers[:]:
+        wf_logger.removeHandler(handler)
+
+    file_handler = logging.FileHandler(log_file_path, mode="a")
     file_handler.setLevel(logging.INFO)
-    
-    # Create formatter
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    file_handler.setFormatter(formatter)
-    
-    # Enable auto-flush for immediate writes
+    file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+
     try:
         file_handler.stream.reconfigure(line_buffering=True)
     except AttributeError:
-        # Fallback for older Python versions
-        pass
-    
-    # Add handler to logger
-    logger.addHandler(file_handler)
-    
-    return logger
+        pass  # older Python
 
-def run_workflow_with_subprocess(project_path: str, log_file_path: str, workflow_id: str):
-    """Run workflow using subprocess with logging"""
-    logger = None
-    
+    wf_logger.addHandler(file_handler)
+    return wf_logger
+
+
+def _resolve_and_guard(base_dir: str, *parts: str) -> str:
+    """Join *parts* under *base_dir*, raise 403 on path-traversal."""
+    full = os.path.abspath(os.path.join(base_dir, *parts))
+    if not full.startswith(os.path.abspath(base_dir)):
+        raise HTTPException(status_code=403, detail="Access denied: path traversal not allowed")
+    return full
+
+
+def _require_dir(path: str) -> None:
+    """Raise 404 if *path* is not an existing directory."""
+    if not os.path.isdir(path):
+        raise HTTPException(status_code=404, detail="Project not found")
+
+
+def _find_files(root_dir: str, predicate, *, prioritize=None) -> list[str]:
+    """Walk *root_dir* returning paths whose basename matches *predicate*.
+
+    If *prioritize* is given (a callable), matching files are pushed to the
+    front of the result list.
+    """
+    results: list[str] = []
+    for root, _dirs, files in os.walk(root_dir):
+        for fname in files:
+            if predicate(fname):
+                full = os.path.join(root, fname)
+                if prioritize and prioritize(fname):
+                    results.insert(0, full)
+                else:
+                    results.append(full)
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Workflow execution (asyncio background task)
+# ---------------------------------------------------------------------------
+
+
+async def _run_workflow_task(project_path: str, log_file_path: str, workflow_id: str) -> None:
+    """Run ``streamflow run streamflow.yml`` in *project_path*, streaming output to logs."""
+    wf_logger: logging.Logger | None = None
+
     try:
-        # Setup logging for this workflow
-        logger = setup_logging(log_file_path)
-        logger.info(f"Starting workflow {workflow_id}")
-        logger.info(f"Project path: {project_path}")
-        
-        # Create custom temporary directory
-        tmpdir = get_custom_tmpdir()
-        logger.info(f"Using temporary directory: {tmpdir}")
-        
-        # Prepare environment for subprocess
+        wf_logger = _setup_file_logger(log_file_path, workflow_id)
+        wf_logger.info("Starting workflow %s", workflow_id)
+        wf_logger.info("Project path: %s", project_path)
+
+        tmpdir = _get_custom_tmpdir()
+        wf_logger.info("Using temporary directory: %s", tmpdir)
+
         env = os.environ.copy()
-        env['TMPDIR'] = tmpdir
-        
-        # Prepare the streamflow command
-        cmd = ['streamflow', 'run', 'streamflow.yml']
-        logger.info(f"Running command: {' '.join(cmd)}")
-        logger.info(f"Working directory: {project_path}")
-        
-        # Run the subprocess
-        process = subprocess.Popen(
-            cmd,
+        env["TMPDIR"] = tmpdir
+
+        cmd = ["streamflow", "run", "streamflow.yml"]
+        wf_logger.info("Running command: %s", " ".join(cmd))
+        wf_logger.info("Working directory: %s", project_path)
+
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
             cwd=project_path,
             env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,  # Merge stderr into stdout for real-time logging
-            text=True,
-            bufsize=1,
-            universal_newlines=True
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
         )
-        
-        # Read output in real-time line by line
-        while True:
-            output = process.stdout.readline()
-            if output == '' and process.poll() is not None:
-                break
-            if output:
-                # Log each line as it comes
-                logger.info(output.rstrip())
-                
-                # Flush the log file to ensure immediate write
-                for handler in logger.handlers:
-                    if hasattr(handler, 'flush'):
-                        handler.flush()
-        
-        # Get final return code
-        return_code = process.returncode
-        
-        # Check return code
-        if return_code == 0:
-            logger.info(f"Workflow {workflow_id} completed successfully")
-            with workflow_lock:
-                running_workflows[workflow_id] = "completed"
-        else:
-            logger.error(f"Workflow {workflow_id} failed with return code: {return_code}")
-            with workflow_lock:
-                running_workflows[workflow_id] = "failed"
-        
-    except Exception as e:
-        if logger is None:
-            logger = setup_logging(log_file_path)
-        logger.error(f"Workflow {workflow_id} failed: {str(e)}", exc_info=True)
-        
-        # Update workflow status with thread safety
-        with workflow_lock:
-            running_workflows[workflow_id] = "failed"
-    finally:
-        # Clean up handlers
-        if logger:
-            for handler in logger.handlers[:]:
-                handler.close()
-                logger.removeHandler(handler)
 
-# ----------------------------------------
+        async for raw_line in process.stdout:
+            line = raw_line.decode(errors="replace").rstrip()
+            wf_logger.info(line)
+            for handler in wf_logger.handlers:
+                if hasattr(handler, "flush"):
+                    handler.flush()
+
+        await process.wait()
+        status = "completed" if process.returncode == 0 else "failed"
+
+        if process.returncode == 0:
+            wf_logger.info("Workflow %s completed successfully", workflow_id)
+        else:
+            wf_logger.error("Workflow %s failed with return code: %d", workflow_id, process.returncode)
+
+        running_workflows[workflow_id] = status
+
+    except Exception as e:
+        if wf_logger is None:
+            wf_logger = _setup_file_logger(log_file_path, workflow_id)
+        wf_logger.error("Workflow %s failed: %s", workflow_id, e, exc_info=True)
+        running_workflows[workflow_id] = "failed"
+    finally:
+        if wf_logger:
+            for handler in wf_logger.handlers[:]:
+                handler.close()
+                wf_logger.removeHandler(handler)
+
+
+# ---------------------------------------------------------------------------
+# Endpoints - workflow catalogue
+# ---------------------------------------------------------------------------
+
 
 @app.get("/workflows", response_model=list[Workflow])
-def getWorkFlows():
-    # create args and map it with tmp files
+def get_workflows():
     return workflows_list
 
+
 @app.get("/running_workflows")
-def get_running_workflows():
-    """Get status of all running workflows"""
+def get_running_workflows_endpoint():
+    """Get status of all tracked workflows."""
     return {
-        "running_workflows": running_workflows,
-        "workflow_logs": workflow_logs
+        "running_workflows": dict(running_workflows),
+        "workflow_logs": dict(workflow_logs),
     }
+
 
 @app.get("/workflow_logs/{usr}/{project_name}/{log_filename}")
 def get_workflow_log_file(usr: str, project_name: str, log_filename: str):
-    """Serve log files"""
-    log_file_path = f"./usrs_dir/{usr}/{project_name}/logs/{log_filename}"
-    if os.path.exists(log_file_path):
-        return FileResponse(log_file_path, media_type="text/plain")
-    else:
+    """Serve a log file."""
+    log_path = _resolve_and_guard("./usrs_dir", usr, project_name, "logs", log_filename)
+    if not os.path.isfile(log_path):
         raise HTTPException(status_code=404, detail="Log file not found")
+    return FileResponse(log_path, media_type="text/plain")
+
 
 @app.get("/workflow_logs_content/{usr}/{project_name}/{log_filename}")
 def get_workflow_log_content(usr: str, project_name: str, log_filename: str):
-    """Get log file content as text for parsing"""
-    log_file_path = f"./usrs_dir/{usr}/{project_name}/logs/{log_filename}"
-    if os.path.exists(log_file_path):
-        try:
-            with open(log_file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            return {"content": content}
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error reading log file: {str(e)}")
-    else:
+    """Return log file content as JSON text (for client-side parsing)."""
+    log_path = _resolve_and_guard("./usrs_dir", usr, project_name, "logs", log_filename)
+    if not os.path.isfile(log_path):
         raise HTTPException(status_code=404, detail="Log file not found")
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            return {"content": f.read()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading log file: {e}")
 
-@app.get("/workflows/{workflow_name}", response_model=WorkflowDetails)
-def getWorkFlowDetails(workflow_name: str):
-    res = Workflow_Details.get(workflow_name)
-    if res is None:  #Todo: manage multiple workflows details, taken from real dir
-        raise HTTPException(status_code=404, detail="Workflow not found")
-    return res
+
+# @app.get("/workflows/{workflow_name}", response_model=WorkflowDetails)
+# def get_workflow_details(workflow_name: str):
+#     res = Workflow_Details.get(workflow_name)
+#     if res is None:
+#         raise HTTPException(status_code=404, detail="Workflow not found")
+#     return res
+
+
+# ---------------------------------------------------------------------------
+# Endpoints - default projects
+# ---------------------------------------------------------------------------
+
 
 @app.get("/default_projects")
 def list_default_projects():
-    """List all available default projects"""
-    default_projects_dir = "./default_projects"
-    
-    if not os.path.exists(default_projects_dir):
+    """List all available default projects."""
+    if not os.path.isdir(DEFAULT_PROJECTS_DIR):
         return {"projects": [], "message": "No default projects directory found"}
-    
+
     projects = []
     try:
-        for item in os.listdir(default_projects_dir):
-            item_path = os.path.join(default_projects_dir, item)
-            if os.path.isdir(item_path):
-                # Get list of files in the project
-                files = []
-                for root, dirs, filenames in os.walk(item_path):
-                    for filename in filenames:
-                        rel_path = os.path.relpath(os.path.join(root, filename), item_path)
-                        files.append(rel_path.replace(os.sep, '/'))
-                
-                projects.append({
-                    "name": item,
-                    "files": files
-                })
+        for item in sorted(os.listdir(DEFAULT_PROJECTS_DIR)):
+            item_path = os.path.join(DEFAULT_PROJECTS_DIR, item)
+            if not os.path.isdir(item_path):
+                continue
+            files = [
+                os.path.relpath(os.path.join(root, fname), item_path).replace(os.sep, "/")
+                for root, _dirs, filenames in os.walk(item_path)
+                for fname in filenames
+            ]
+            projects.append({"name": item, "files": files})
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error reading default projects: {str(e)}")
-    
+        raise HTTPException(status_code=500, detail=f"Error reading default projects: {e}")
+
     return {"projects": projects}
+
 
 @app.get("/default_projects/{project_name}/files/{file_path:path}")
 def get_default_project_file(project_name: str, file_path: str):
-    """Download a specific file from a default project"""
-    # Sanitize the project name and file path to prevent directory traversal
+    """Download a specific file from a default project."""
     project_name = os.path.basename(project_name)
-    file_path = file_path.lstrip('/')
-    
-    # Construct the full file path
-    full_path = os.path.join("./default_projects", project_name, file_path)
-    
-    # Security check: ensure the path is within the default_projects directory
-    abs_projects_dir = os.path.abspath("./default_projects")
-    abs_file_path = os.path.abspath(full_path)
-    
-    if not abs_file_path.startswith(abs_projects_dir):
-        raise HTTPException(status_code=403, detail="Access denied: path traversal not allowed")
-    
-    if not os.path.exists(full_path) or not os.path.isfile(full_path):
+    file_path = file_path.lstrip("/")
+    full_path = _resolve_and_guard(DEFAULT_PROJECTS_DIR, project_name, file_path)
+
+    if not os.path.isfile(full_path):
         raise HTTPException(status_code=404, detail="File not found")
-    
-    # Determine MIME type
+
     mime_type, _ = mimetypes.guess_type(full_path)
-    if mime_type is None:
-        mime_type = "application/octet-stream"
-    
     return FileResponse(
         path=full_path,
-        media_type=mime_type,
-        filename=os.path.basename(file_path)
+        media_type=mime_type or "application/octet-stream",
+        filename=os.path.basename(file_path),
     )
+
 
 @app.get("/default_projects/{project_name}/image")
 def get_default_project_image(project_name: str):
-    """Get workflow diagram image for a default project"""
-    # Sanitize the project name
+    """Get workflow diagram image for a default project."""
     project_name = os.path.basename(project_name)
-    project_path = os.path.join("./default_projects", project_name)
-    
-    # Security check: ensure the path is within the default_projects directory
-    abs_projects_dir = os.path.abspath("./default_projects")
-    abs_project_path = os.path.abspath(project_path)
-    
-    if not abs_project_path.startswith(abs_projects_dir):
-        raise HTTPException(status_code=403, detail="Access denied: path traversal not allowed")
-    
-    if not os.path.exists(project_path) or not os.path.isdir(project_path):
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    # Look for common image file extensions
-    image_extensions = ['.png', '.jpg', '.jpeg', '.svg', '.gif']
-    image_files = []
-    
-    for root, dirs, files in os.walk(project_path):
-        for file in files:
-            if any(file.lower().endswith(ext) for ext in image_extensions):
-                # Prioritize files with 'workflow', 'diagram', or 'flow' in the name
-                if any(keyword in file.lower() for keyword in ['workflow', 'diagram', 'graph', 'flow', 'pipeline']):
-                    image_files.insert(0, os.path.join(root, file))
-                else:
-                    image_files.append(os.path.join(root, file))
-    
-    if not image_files:
-        raise HTTPException(status_code=404, detail="No workflow image found")
-    
-    # Return the first (prioritized) image
-    image_path = image_files[0]
-    
-    # Determine MIME type
-    mime_type, _ = mimetypes.guess_type(image_path)
-    if mime_type is None:
-        mime_type = "application/octet-stream"
-    
-    return FileResponse(
-        path=image_path,
-        media_type=mime_type,
-        filename=os.path.basename(image_path)
+    project_path = _resolve_and_guard(DEFAULT_PROJECTS_DIR, project_name)
+    _require_dir(project_path)
+
+    image_extensions = {".png", ".jpg", ".jpeg", ".svg", ".gif"}
+    keyword_hints = {"workflow", "diagram", "graph", "flow", "pipeline"}
+
+    images = _find_files(
+        project_path,
+        predicate=lambda f: any(f.lower().endswith(ext) for ext in image_extensions),
+        prioritize=lambda f: any(kw in f.lower() for kw in keyword_hints),
     )
+
+    if not images:
+        raise HTTPException(status_code=404, detail="No workflow image found")
+
+    mime_type, _ = mimetypes.guess_type(images[0])
+    return FileResponse(
+        path=images[0],
+        media_type=mime_type or "application/octet-stream",
+        filename=os.path.basename(images[0]),
+    )
+
 
 @app.get("/default_projects/{project_name}/description")
 def get_default_project_description(project_name: str):
-    """Get workflow description (README) for a default project"""
-    # Sanitize the project name
+    """Get workflow description (README) for a default project."""
     project_name = os.path.basename(project_name)
-    project_path = os.path.join("./default_projects", project_name)
-    
-    # Security check: ensure the path is within the default_projects directory
-    abs_projects_dir = os.path.abspath("./default_projects")
-    abs_project_path = os.path.abspath(project_path)
-    
-    if not abs_project_path.startswith(abs_projects_dir):
-        raise HTTPException(status_code=403, detail="Access denied: path traversal not allowed")
-    
-    if not os.path.exists(project_path) or not os.path.isdir(project_path):
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    # Look for README files
-    readme_files = []
-    readme_names = ['readme.md', 'readme.txt', 'readme', 'description.md']
-    
-    for root, dirs, files in os.walk(project_path):
-        for file in files:
-            if file.lower() in readme_names:
-                readme_files.append(os.path.join(root, file))
-    
-    if not readme_files:
-        # Return a default description if no README found
+    project_path = _resolve_and_guard(DEFAULT_PROJECTS_DIR, project_name)
+    _require_dir(project_path)
+
+    readme_names = {"readme.md", "readme.txt", "readme", "description.md"}
+    readmes = _find_files(project_path, predicate=lambda f: f.lower() in readme_names)
+
+    if not readmes:
         return {
             "content": f"# {project_name}\n\nNo description available for this workflow.",
-            "filename": "generated"
+            "filename": "generated",
         }
-    
-    # Use the first README file found
-    readme_path = readme_files[0]
-    
+
     try:
-        with open(readme_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        return {
-            "content": content,
-            "filename": os.path.basename(readme_path)
-        }
+        with open(readmes[0], "r", encoding="utf-8") as f:
+            return {"content": f.read(), "filename": os.path.basename(readmes[0])}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error reading description file: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error reading description file: {e}")
+
 
 @app.get("/default_projects/{project_name}/streamflow")
 def get_default_project_streamflow_as_json(project_name: str):
-    """Get all project files with streamflow.yml converted to JSON"""
-    # Sanitize the project name
+    """Get all project files with streamflow.yml converted to JSON."""
     project_name = os.path.basename(project_name)
-    project_path = os.path.join("./default_projects", project_name)
-    
-    # Security check: ensure the path is within the default_projects directory
-    abs_projects_dir = os.path.abspath("./default_projects")
-    abs_project_path = os.path.abspath(project_path)
-    
-    if not abs_project_path.startswith(abs_projects_dir):
-        raise HTTPException(status_code=403, detail="Access denied: path traversal not allowed")
-    
-    if not os.path.exists(project_path) or not os.path.isdir(project_path):
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    try:
-        project_files = {}
-        streamflow_config = None
-        
-        # Walk through all files in the project directory
-        for root, dirs, files in os.walk(project_path):
-            for filename in files:
-                file_path = os.path.join(root, filename)
-                relative_path = os.path.relpath(file_path, project_path)
-                # Normalize path separators for consistency
-                relative_path = relative_path.replace(os.sep, '/')
-                
-                try:
-                    # Handle YAML files
-                    if filename.endswith(('.yml', '.yaml')):
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            content = yaml.safe_load(f)
-                            project_files[relative_path] = {
-                                'type': 'yaml',
-                                'content': content
-                            }
-                            
-                            # Special handling for streamflow.yml
-                            if filename == 'streamflow.yml':
-                                streamflow_config = content
-                    
-                    # Handle cwl files (CWL)
-                    elif filename.endswith(('.cwl')):
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            content = f.read()
-                            project_files[relative_path] = {
-                                'type': 'cwl',
-                                'content': content
-                            }
+    project_path = _resolve_and_guard(DEFAULT_PROJECTS_DIR, project_name)
+    _require_dir(project_path)
 
-                    # Handle script files (.py and sh)
-                    elif filename.endswith(('.py', '.sh')):
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            content = f.read()
-                            project_files[relative_path] = {
-                                'type': 'script',
-                                'content': content
-                            }
-                    
-                    # Handle text-based files (txt and md)
-                    elif filename.endswith(('.txt', '.md')):
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            content = f.read()
-                            project_files[relative_path] = {
-                                'type': 'text',
-                                'content': content
-                            }
-                    
-                    # Handle other files as binary/text based on content
-                    else:
-                        try:
-                            with open(file_path, 'r', encoding='utf-8') as f:
-                                content = f.read()
-                                project_files[relative_path] = {
-                                    'type': 'text',
-                                    'content': content
-                                }
-                        except UnicodeDecodeError:
-                            # Binary file - skip or handle differently
-                            project_files[relative_path] = {
-                                'type': 'binary',
-                                'content': 'Binary file - not editable'
-                            }
-                
-                except Exception as e:
-                    # If we can't read a file, note the error
-                    project_files[relative_path] = {
-                        'type': 'error',
-                        'content': f'Error reading file: {str(e)}'
-                    }
-        
-        return {
-            "project_name": project_name,
-            "streamflow_config": streamflow_config,
-            "project_files": project_files
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error reading project files: {str(e)}")
+    project_files: dict = {}
+    streamflow_config = None
 
-@app.get("/default_projects/{project_name}/image")
-def get_default_project_image(project_name: str):
-    """Get workflow diagram image for a default project"""
-    # Sanitize the project name
-    project_name = os.path.basename(project_name)
-    project_path = os.path.join("./default_projects", project_name)
-    
-    # Security check: ensure the path is within the default_projects directory
-    abs_projects_dir = os.path.abspath("./default_projects")
-    abs_project_path = os.path.abspath(project_path)
-    
-    if not abs_project_path.startswith(abs_projects_dir):
-        raise HTTPException(status_code=403, detail="Access denied: path traversal not allowed")
-    
-    if not os.path.exists(project_path) or not os.path.isdir(project_path):
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    # Look for common image file extensions
-    image_extensions = ['.png', '.jpg', '.jpeg', '.svg', '.gif']
-    image_files = []
-    
-    for root, dirs, files in os.walk(project_path):
-        for file in files:
-            if any(file.lower().endswith(ext) for ext in image_extensions):
-                # Prioritize files with 'workflow', 'diagram', or 'flow' in the name
-                if any(keyword in file.lower() for keyword in ['workflow', 'diagram', 'flow', 'pipeline']):
-                    image_files.insert(0, os.path.join(root, file))
+    for root, _dirs, files in os.walk(project_path):
+        for filename in files:
+            file_path = os.path.join(root, filename)
+            relative_path = os.path.relpath(file_path, project_path).replace(os.sep, "/")
+
+            try:
+                if filename.endswith((".yml", ".yaml")):
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        content = yaml.safe_load(f)
+                    project_files[relative_path] = {"type": "yaml", "content": content}
+                    if filename == "streamflow.yml":
+                        streamflow_config = content
+
+                elif filename.endswith(".cwl"):
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        project_files[relative_path] = {"type": "cwl", "content": f.read()}
+
+                elif filename.endswith((".py", ".sh")):
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        project_files[relative_path] = {"type": "script", "content": f.read()}
+
+                elif filename.endswith((".txt", ".md")):
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        project_files[relative_path] = {"type": "text", "content": f.read()}
+
                 else:
-                    image_files.append(os.path.join(root, file))
-    
-    if not image_files:
-        raise HTTPException(status_code=404, detail="No workflow image found")
-    
-    # Return the first (prioritized) image
-    image_path = image_files[0]
-    
-    # Determine MIME type
-    mime_type, _ = mimetypes.guess_type(image_path)
-    if mime_type is None:
-        mime_type = "application/octet-stream"
-    
-    return FileResponse(
-        path=image_path,
-        media_type=mime_type,
-        filename=os.path.basename(image_path)
-    )
+                    try:
+                        with open(file_path, "r", encoding="utf-8") as f:
+                            project_files[relative_path] = {"type": "text", "content": f.read()}
+                    except UnicodeDecodeError:
+                        project_files[relative_path] = {"type": "binary", "content": "Binary file - not editable"}
 
-@app.get("/default_projects/{project_name}/description")
-def get_default_project_description(project_name: str):
-    """Get workflow description (README) for a default project"""
-    # Sanitize the project name
-    project_name = os.path.basename(project_name)
-    project_path = os.path.join("./default_projects", project_name)
-    
-    # Security check: ensure the path is within the default_projects directory
-    abs_projects_dir = os.path.abspath("./default_projects")
-    abs_project_path = os.path.abspath(project_path)
-    
-    if not abs_project_path.startswith(abs_projects_dir):
-        raise HTTPException(status_code=403, detail="Access denied: path traversal not allowed")
-    
-    if not os.path.exists(project_path) or not os.path.isdir(project_path):
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    # Look for README files
-    readme_files = []
-    readme_names = ['readme.md', 'readme.txt', 'readme', 'description.md']
-    
-    for root, dirs, files in os.walk(project_path):
-        for file in files:
-            if file.lower() in readme_names:
-                readme_files.append(os.path.join(root, file))
-    
-    if not readme_files:
-        # Return a default description if no README found
-        return {
-            "content": f"# {project_name}\n\nNo description available for this workflow.",
-            "filename": "generated"
-        }
-    
-    # Use the first README file found
-    readme_path = readme_files[0]
-    
-    try:
-        with open(readme_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        return {
-            "content": content,
-            "filename": os.path.basename(readme_path)
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error reading description file: {str(e)}")
+            except Exception as e:
+                project_files[relative_path] = {"type": "error", "content": f"Error reading file: {e}"}
+
+    return {
+        "project_name": project_name,
+        "streamflow_config": streamflow_config,
+        "project_files": project_files,
+    }
+
 
 @app.get("/default_projects/{project_name}/download")
 def download_default_project_archive(project_name: str):
-    """Download entire default project as a ZIP archive"""
-    # Sanitize the project name
+    """Download entire default project as a ZIP archive."""
     project_name = os.path.basename(project_name)
-    project_path = os.path.join("./default_projects", project_name)
-    
-    if not os.path.exists(project_path) or not os.path.isdir(project_path):
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    # Create a temporary ZIP file
-    temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
-    temp_zip.close()
-    
+    project_path = _resolve_and_guard(DEFAULT_PROJECTS_DIR, project_name)
+    _require_dir(project_path)
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+    tmp.close()
+
     try:
-        with zipfile.ZipFile(temp_zip.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for root, dirs, files in os.walk(project_path):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    arc_name = os.path.relpath(file_path, project_path)
-                    zipf.write(file_path, arc_name)
-        
+        with zipfile.ZipFile(tmp.name, "w", zipfile.ZIP_DEFLATED) as zf:
+            for root, _dirs, files in os.walk(project_path):
+                for fname in files:
+                    full = os.path.join(root, fname)
+                    zf.write(full, os.path.relpath(full, project_path))
+
         return FileResponse(
-            path=temp_zip.name,
+            path=tmp.name,
             media_type="application/zip",
             filename=f"{project_name}.zip",
-            background=lambda: os.unlink(temp_zip.name)  # Clean up temp file after sending
+            background=lambda: os.unlink(tmp.name),
         )
     except Exception as e:
-        os.unlink(temp_zip.name)  # Clean up on error
-        raise HTTPException(status_code=500, detail=f"Error creating archive: {str(e)}")
+        os.unlink(tmp.name)
+        raise HTTPException(status_code=500, detail=f"Error creating archive: {e}")
 
-# ----------------------------------------
 
-# streamflow run with args post 
+# ---------------------------------------------------------------------------
+# Endpoint - run workflow
+# ---------------------------------------------------------------------------
+
+
 @app.post("/run/{usr}/{project_name}")
-def run(usr: str, project_name: str | None, files: list[UploadFile]) -> dict:
-    
-    if files.__len__() < 1:
+async def run(usr: str, project_name: str | None, files: list[UploadFile]) -> dict:
+    if not files:
         raise HTTPException(status_code=400, detail="At least one file is required")
-    
-    #TODO: validate files
-        
-    # save tmp dir // creates temporary directory
+
     proj_path = getDefaultProjectDir(usr, project_name)
 
-    # put files into tmp directory with proper directory structure
     for elem in files:
         raw = elem.file.read()
-        filename = elem.filename
-        
-        # Handle directory structure - check if filename contains path separators
-        if filename and ('/' in filename or '\\' in filename):
-            # Normalize path separators
-            normalized_path = filename.replace('\\', '/')
-            file_path = os.path.join(proj_path, normalized_path)
-            
-            # Create directory structure if it doesn't exist
-            dir_path = os.path.dirname(file_path)
-            os.makedirs(dir_path, exist_ok=True)
-            print(f"Created directory structure: {dir_path}")
-        else:
-            # Single file, save directly in project root
-            file_path = os.path.join(proj_path, str(filename))
-        
-        # Write file to its destination
-        with open(file_path, "wb") as f:
-            f.write(raw)
-        print(f"saved file: {file_path}")
-          
+        filename = elem.filename or "unnamed"
 
-    # Create output directory
-    output_dir = proj_path + "/output"
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # Generate unique workflow ID
+        if "/" in filename or "\\" in filename:
+            normalized = filename.replace("\\", "/")
+            dest = os.path.join(proj_path, normalized)
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+        else:
+            dest = os.path.join(proj_path, filename)
+
+        with open(dest, "wb") as f:
+            f.write(raw)
+        logger.info("Saved file: %s", dest)
+
+    os.makedirs(os.path.join(proj_path, "output"), exist_ok=True)
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    project_safe_name = project_name if project_name else "unknown"
-    workflow_id = f"{project_safe_name}_{usr}_{timestamp}"
-    
-    # Create log file path
-    log_dir = f"./usrs_dir/{usr}/{project_name}/logs"
+    safe_name = project_name or "unknown"
+    workflow_id = f"{safe_name}_{usr}_{timestamp}"
+
+    log_dir = os.path.join("./usrs_dir", usr, safe_name, "logs")
     os.makedirs(log_dir, exist_ok=True)
-    log_file_path = f"{log_dir}/{workflow_id}.log"
-    
-    # Mark workflow as running with thread safety
-    with workflow_lock:
-        running_workflows[workflow_id] = "running"
-        workflow_logs[workflow_id] = log_file_path
-    
-    # Start workflow in separate thread using subprocess
-    thread = threading.Thread(
-        target=run_workflow_with_subprocess,
-        args=(proj_path, log_file_path, workflow_id)
-    )
-    thread.daemon = True
-    thread.start()
-    
+    log_file_path = os.path.join(log_dir, f"{workflow_id}.log")
+
+    running_workflows[workflow_id] = "running"
+    workflow_logs[workflow_id] = log_file_path
+
+    asyncio.create_task(_run_workflow_task(proj_path, log_file_path, workflow_id))
+
     return {
         "workflow_id": workflow_id,
         "status": "started",
-        "log_file": log_file_path
+        "log_file": log_file_path,
     }
+
+
+# ---------------------------------------------------------------------------
+# Dev entry point
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=4646)
