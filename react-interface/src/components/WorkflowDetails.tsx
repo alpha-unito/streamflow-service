@@ -159,7 +159,7 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
     <div>
       <div className="row h-100">
         <div className="col-12">
-          <h3>{workflow.name}</h3>
+          {/* <h3>{workflow.name}</h3> */}
           
           {/* Workflow Overview Section */}
           <div className="mb-4">
