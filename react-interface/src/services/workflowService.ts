@@ -27,18 +27,18 @@ export async function fetchWorkflows(): Promise<Workflow[]> {
   
 }
 
-export async function fetchWorkflowDetails( workflowId: string ): Promise<WorkflowDetails> {
+// export async function fetchWorkflowDetails( workflowId: string ): Promise<WorkflowDetails> {
   
-  const response = await fetch(
-    `${API_BASE_URL}/workflows/${workflowId}`
-  );
+//   const response = await fetch(
+//     `${API_BASE_URL}/workflows/${workflowId}`
+//   );
 
-  if (!response.ok) {
-    throw new Error("Failed to fetch workflow details")
-  }
+//   if (!response.ok) {
+//     throw new Error("Failed to fetch workflow details")
+//   }
 
-  return response.json();
-}
+//   return response.json();
+// }
 
 export async function executeWorkflow(workflowName: string): Promise<void> {
   
@@ -131,30 +131,30 @@ export async function fetchDefaultProjects(): Promise<DefaultProjectsResponse> {
   return response.json();
 }
 
-export async function downloadDefaultProject(projectName: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/default_projects/${projectName}/download`);
+// export async function downloadDefaultProject(projectName: string): Promise<void> {
+//   const response = await fetch(`${API_BASE_URL}/default_projects/${projectName}/download`);
   
-  if (!response.ok) {
-    throw new Error('Failed to download project');
-  }
+//   if (!response.ok) {
+//     throw new Error('Failed to download project');
+//   }
   
-  // Get the file as a blob
-  const blob = await response.blob();
+//   // Get the file as a blob
+//   const blob = await response.blob();
   
-  // Create a download link
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${projectName}.zip`;
+//   // Create a download link
+//   const url = window.URL.createObjectURL(blob);
+//   const link = document.createElement('a');
+//   link.href = url;
+//   link.download = `${projectName}.zip`;
   
-  // Trigger download
-  document.body.appendChild(link);
-  link.click();
+//   // Trigger download
+//   document.body.appendChild(link);
+//   link.click();
   
-  // Cleanup
-  document.body.removeChild(link);
-  window.URL.revokeObjectURL(url);
-}
+//   // Cleanup
+//   document.body.removeChild(link);
+//   window.URL.revokeObjectURL(url);
+// }
 
 export interface DefaultProjectStreamflowResponse {
   project_name: string;
@@ -210,6 +210,8 @@ export async function executeModifiedConfig(projectName: string, projectData: De
         break;
       
       case 'text':
+      case 'cwl':
+      case 'script':
         // Text files remain as text
         fileContent = fileData.content;
         break;
