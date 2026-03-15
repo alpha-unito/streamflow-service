@@ -1,5 +1,8 @@
 #custom ignores
-toy_files/out*
+toy_files/*out
+SFExamples/*
+usrs_dir/*
+default_projects/*
 
 # Environment Variables
 .env

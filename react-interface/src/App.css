@@ -1,0 +1,115 @@
+#root {
+  min-width: 576px;
+  margin: 0 auto;
+  text-align: center;
+  height: 100%;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}
+
+/* Markdown content styling */
+.markdown-content {
+  text-align: left;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.markdown-content h1 {
+  font-size: 1.5rem;
+  margin-bottom: 0.8rem;
+  color: #333;
+  border-bottom: 2px solid #e9ecef;
+  padding-bottom: 0.3rem;
+}
+
+.markdown-content h2 {
+  font-size: 1.3rem;
+  margin-bottom: 0.6rem;
+  color: #333;
+  margin-top: 1.5rem;
+}
+
+.markdown-content h3 {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+  color: #333;
+  margin-top: 1rem;
+}
+
+.markdown-content p {
+  margin-bottom: 0.8rem;
+  color: #666;
+}
+
+.markdown-content ul, .markdown-content ol {
+  margin-bottom: 0.8rem;
+  padding-left: 1.5rem;
+}
+
+.markdown-content li {
+  margin-bottom: 0.3rem;
+  color: #666;
+}
+
+.markdown-content code {
+  background-color: #f8f9fa;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+}
+
+.markdown-content pre {
+  background-color: #f8f9fa;
+  padding: 1rem;
+  border-radius: 5px;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.markdown-content pre code {
+  background-color: transparent;
+  padding: 0;
+}
+
+.markdown-content blockquote {
+  border-left: 4px solid #e9ecef;
+  padding-left: 1rem;
+  margin: 1rem 0;
+  font-style: italic;
+  color: #666;
+}

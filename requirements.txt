@@ -3,4 +3,5 @@ redis
 types-redis
 uvicorn
 pyyaml
-streamflow==0.2.0.dev13
+streamflow==0.2.0.dev14
+pydantic
