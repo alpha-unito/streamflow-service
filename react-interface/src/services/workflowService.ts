@@ -189,6 +189,34 @@ export async function getDefaultProjectDescription(projectName: string): Promise
   return response.json();
 }
 
+export async function downloadWorkflowOutput(username: string, projectName: string): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/workflow_output/${encodeURIComponent(username)}/${encodeURIComponent(projectName)}/download`,
+  );
+
+  if (!response.ok) {
+    const fallback = 'Failed to download workflow output';
+    try {
+      const data = await response.json();
+      throw new Error(data?.detail || fallback);
+    } catch {
+      throw new Error(fallback);
+    }
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${projectName}_output.zip`;
+
+  document.body.appendChild(link);
+  link.click();
+
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+}
+
 export async function executeModifiedConfig(projectName: string, projectData: DefaultProjectStreamflowResponse): Promise<any> {
   if (!currentUser) {
     throw new Error('No user set. Please set a user first.');

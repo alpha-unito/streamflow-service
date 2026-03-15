@@ -6,6 +6,7 @@ import {
   getWorkflowLogContent,
   getWorkflowLogUrl,
   parseLogPath,
+  downloadWorkflowOutput,
 } from "../services/workflowService"
 
 // ---------------------------------------------------------------------------
@@ -370,6 +371,22 @@ export function WorkflowStatus({ workflowId, projectName, onClose }: WorkflowSta
     else alert("Log file not available yet")
   }
 
+  const handleGetOutput = async () => {
+    const username = getCurrentUser()
+    if (!username) {
+      setError("No current user selected")
+      return
+    }
+
+    try {
+      console.log(`Attempting to download output for user ${username} and project ${projectName}`)
+      await downloadWorkflowOutput(username, projectName)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to download output"
+      setError(msg)
+    }
+  }
+
   return (
     <div className="mt-4">
       {/* Overall status banner */}
@@ -437,7 +454,7 @@ export function WorkflowStatus({ workflowId, projectName, onClose }: WorkflowSta
 
       {/* Action buttons */}
       <div className="d-flex gap-2 mt-3">
-        <button className="btn btn-outline-primary" disabled={status !== "completed"}>
+        <button className="btn btn-outline-primary" onClick={handleGetOutput} disabled={status !== "completed"}>
           Get Output
         </button>
         <button className="btn btn-outline-secondary" onClick={handleViewLog} disabled={!currentLogUrl}>

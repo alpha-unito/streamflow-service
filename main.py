@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 import asyncio
 import logging
@@ -383,11 +384,50 @@ def download_default_project_archive(project_name: str):
             path=tmp.name,
             media_type="application/zip",
             filename=f"{project_name}.zip",
-            background=lambda: os.unlink(tmp.name),
+            background=BackgroundTask(os.unlink, tmp.name),
         )
     except Exception as e:
         os.unlink(tmp.name)
         raise HTTPException(status_code=500, detail=f"Error creating archive: {e}")
+
+
+@app.get("/workflow_output/{usr}/{project_name}/download")
+def download_workflow_output_archive(usr: str, project_name: str):
+    """Download a ZIP archive containing files from a workflow output directory."""
+    usr = os.path.basename(usr)
+    project_name = os.path.basename(project_name)
+
+    output_path = _resolve_and_guard("./usrs_dir", usr, project_name, "output")
+    _require_dir(output_path)
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+    tmp.close()
+
+    try:
+        has_files = False
+        with zipfile.ZipFile(tmp.name, "w", zipfile.ZIP_DEFLATED) as zf:
+            for root, _dirs, files in os.walk(output_path):
+                for fname in files:
+                    has_files = True
+                    full = os.path.join(root, fname)
+                    zf.write(full, os.path.relpath(full, output_path))
+
+        if not has_files:
+            os.unlink(tmp.name)
+            raise HTTPException(status_code=404, detail="No output files found")
+
+        return FileResponse(
+            path=tmp.name,
+            media_type="application/zip",
+            filename=f"{project_name}_output.zip",
+            background=BackgroundTask(os.unlink, tmp.name),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        if os.path.exists(tmp.name):
+            os.unlink(tmp.name)
+        raise HTTPException(status_code=500, detail=f"Error creating output archive: {e}")
 
 
 # ---------------------------------------------------------------------------
