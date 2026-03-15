@@ -4,9 +4,10 @@ import './App.css'
 import type { DefaultProject } from "./services/workflowService";
 import { WorkflowList } from './components/WorkflowList.tsx'
 import { WorkflowDetails } from "./components/WorkflowDetails"
-import { WorkflowForm } from './components/WorkflowForm.tsx'
+// import { WorkflowForm } from './components/WorkflowForm.tsx'
+// import { uploadAndRunWorkflow} from './services/workflowService.ts';
 // import { DefaultProjectDownloader } from './components/DefaultProjectDownloader.tsx'
-import { uploadAndRunWorkflow, setCurrentUser } from './services/workflowService.ts';
+import { setCurrentUser } from './services/workflowService.ts';
 
 
 function App() {
@@ -16,16 +17,16 @@ function App() {
   const handleBackToList = () => {setSelectedWorkflow(null);}
   
 
-  // File upload and run handler
-  const handleUploadAndRun = async (files: File[], projectName: string) => {
-    try {
-      const result = await uploadAndRunWorkflow(files, projectName);
-      alert(`Successfully started workflow! Workflow ID: ${result.workflow_id}`);
-    } catch (error) {
-      alert("Error uploading workflow: " + error);
-      throw error; // Re-throw to allow form to handle the error state
-    }
-  };
+  // // File upload and run handler
+  // const handleUploadAndRun = async (files: File[], projectName: string) => {
+  //   try {
+  //     const result = await uploadAndRunWorkflow(files, projectName);
+  //     alert(`Successfully started workflow! Workflow ID: ${result.workflow_id}`);
+  //   } catch (error) {
+  //     alert("Error uploading workflow: " + error);
+  //     throw error; // Re-throw to allow form to handle the error state
+  //   }
+  // };
 
   const handleUsernameSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -69,9 +70,9 @@ function App() {
           <WorkflowList onSelectWorkflow={setSelectedWorkflow}/>
         )} 
 
-        {/* Upload Form - only show when not viewing workflow details */}
+        {/* Upload Form - only show when not viewing workflow details
         {!selectedWorkflow && <WorkflowForm onSubmit={handleUploadAndRun} />}
-      
+       */}
       </div>
     </div>
   )

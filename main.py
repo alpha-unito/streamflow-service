@@ -123,7 +123,7 @@ async def _run_workflow_task(project_path: str, log_file_path: str, workflow_id:
         env = os.environ.copy()
         env["TMPDIR"] = tmpdir
 
-        cmd = ["streamflow", "run", "streamflow.yml"]
+        cmd = ["streamflow", "run", "streamflow.yml","--outdir", "./output"]
         wf_logger.info("Running command: %s", " ".join(cmd))
         wf_logger.info("Working directory: %s", project_path)
 
