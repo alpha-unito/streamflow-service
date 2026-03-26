@@ -11,32 +11,24 @@ Servers, by default, uses *4646 port for fastAPI* server and *4545 port for the 
 
 Once started, the platform let you to upload and run workflows and then retrieve output and log files.
 
-### setup and run fastAPI
+### setup and run the backend
 
-To set up the fastAPI server you need to have python3 installed. Then run these commands to create the virtual environment and the required packages:
+The backend server has already a docker file inside the directory `streamflow-service/backend`. You need just to move inside the directory than build and run the container:
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+cd backend
+docker build -t streamflow-service-backend .
+docker run -p 4646:8080 -v /home/tfogliobonda/streamflow-service/default_projects:/default_projects --rm --detach streamflow-service-backend
 ```
 
-Note: streamflow requires Python 3.8 to 3.12 to run properly.
+### setup and run the frontend
 
-To make running fastAPI server just use the command
-
-```bash
-python3 main.py
-```
-
-### setup and run React interface server
-
-The Node.js server has already a docker file inside the directory `streamflow-service/react-interface`. You need just to move inside the directory than build and run the container:
+The frontend server has already a docker file inside the directory `streamflow-service/frontend`. You need just to move inside the directory than build and run the container:
 
 ```bash
-cd react-interface
-docker build -t react-interface .
-docker run -p 4545:8080 --rm react-interface
+cd frontend
+docker build -t streamflow-service-frontend .
+docker run -p 4545:8080 --rm --detach streamflow-service-frontend
 ```
 
 ## run workflows: structure of projects

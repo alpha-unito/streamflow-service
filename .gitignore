@@ -2,7 +2,7 @@
 toy_files/*out
 SFExamples/*
 usrs_dir/*
-default_projects/*
+default_projects/**
 
 # Environment Variables
 .env

@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 running_workflows: dict[str, str] = {}
 workflow_logs: dict[str, str] = {}
 
-DEFAULT_PROJECTS_DIR = "./default_projects"
+DEFAULT_PROJECTS_DIR = "/default_projects"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -486,4 +486,4 @@ async def run(usr: str, project_name: str | None, files: list[UploadFile]) -> di
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=4646)
+    uvicorn.run(app, host="0.0.0.0", port=8080)
