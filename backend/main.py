@@ -74,8 +74,9 @@ def _setup_file_logger(log_file_path: str, workflow_id: str) -> logging.Logger:
 
 def _resolve_and_guard(base_dir: str, *parts: str) -> str:
     """Join *parts* under *base_dir*, raise 403 on path-traversal."""
-    full = os.path.abspath(os.path.join(base_dir, *parts))
-    if not full.startswith(os.path.abspath(base_dir)):
+    base_abs = os.path.abspath(base_dir)
+    full = os.path.abspath(os.path.join(base_abs, *parts))
+    if os.path.commonpath([base_abs, full]) != base_abs:
         raise HTTPException(status_code=403, detail="Access denied: path traversal not allowed")
     return full
 
@@ -428,6 +429,68 @@ def download_workflow_output_archive(usr: str, project_name: str):
         if os.path.exists(tmp.name):
             os.unlink(tmp.name)
         raise HTTPException(status_code=500, detail=f"Error creating output archive: {e}")
+
+
+@app.get("/workflow_output/{usr}/{project_name}/list")
+def list_workflow_output(usr: str, project_name: str):
+    """List output directory contents for a workflow run."""
+    usr = os.path.basename(usr)
+    project_name = os.path.basename(project_name)
+
+    output_path = _resolve_and_guard("./usrs_dir", usr, project_name, "output")
+    _require_dir(output_path)
+
+    entries: list[dict] = []
+    seen_dirs: set[str] = set()
+
+    for root, dirs, files in os.walk(output_path):
+        rel_root = os.path.relpath(root, output_path).replace(os.sep, "/")
+        if rel_root == ".":
+            rel_root = ""
+
+        for d in dirs:
+            rel_dir = f"{rel_root}/{d}".lstrip("/")
+            if rel_dir and rel_dir not in seen_dirs:
+                seen_dirs.add(rel_dir)
+                entries.append({"path": rel_dir, "is_dir": True})
+
+        for fname in files:
+            full = os.path.join(root, fname)
+            rel_file = f"{rel_root}/{fname}".lstrip("/")
+            try:
+                st = os.stat(full)
+                entries.append(
+                    {
+                        "path": rel_file,
+                        "is_dir": False,
+                        "size": st.st_size,
+                        "modified": datetime.fromtimestamp(st.st_mtime).isoformat(),
+                    }
+                )
+            except Exception:
+                entries.append({"path": rel_file, "is_dir": False})
+
+    entries.sort(key=lambda e: (e.get("path", ""), 0 if e.get("is_dir", False) else 1))
+    return {"usr": usr, "project_name": project_name, "entries": entries}
+
+
+@app.get("/workflow_output/{usr}/{project_name}/files/{file_path:path}")
+def download_workflow_output_file(usr: str, project_name: str, file_path: str):
+    """Download a specific file from a workflow output directory."""
+    usr = os.path.basename(usr)
+    project_name = os.path.basename(project_name)
+    file_path = file_path.lstrip("/")
+
+    full_path = _resolve_and_guard("./usrs_dir", usr, project_name, "output", file_path)
+    if not os.path.isfile(full_path):
+        raise HTTPException(status_code=404, detail="Output file not found")
+
+    mime_type, _ = mimetypes.guess_type(full_path)
+    return FileResponse(
+        path=full_path,
+        media_type=mime_type or "application/octet-stream",
+        filename=os.path.basename(file_path),
+    )
 
 
 # ---------------------------------------------------------------------------

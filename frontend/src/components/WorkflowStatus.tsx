@@ -1,12 +1,12 @@
 // components/WorkflowStatus.tsx
 import { useCallback, useEffect, useRef, useState } from "react"
+import { WorkflowOutput } from "./WorkflowOutput"
 import {
   getRunningWorkflows,
   getCurrentUser,
   getWorkflowLogContent,
   getWorkflowLogUrl,
   parseLogPath,
-  downloadWorkflowOutput,
 } from "../services/workflowService"
 
 // ---------------------------------------------------------------------------
@@ -264,6 +264,7 @@ export function WorkflowStatus({ workflowId, projectName, onClose }: WorkflowSta
   const [detailedSteps, setDetailedSteps] = useState<WorkflowStep[]>([])
   const [currentLogUrl, setCurrentLogUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showOutput, setShowOutput] = useState<boolean>(false)
 
   // Use a ref so the interval callback always sees the latest status without
   // re-creating the effect (which would reset the interval).
@@ -371,20 +372,8 @@ export function WorkflowStatus({ workflowId, projectName, onClose }: WorkflowSta
     else alert("Log file not available yet")
   }
 
-  const handleGetOutput = async () => {
-    const username = getCurrentUser()
-    if (!username) {
-      setError("No current user selected")
-      return
-    }
-
-    try {
-      console.log(`Attempting to download output for user ${username} and project ${projectName}`)
-      await downloadWorkflowOutput(username, projectName)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to download output"
-      setError(msg)
-    }
+  if (showOutput) {
+    return <WorkflowOutput projectName={projectName} onClose={() => setShowOutput(false)} />
   }
 
   return (
@@ -454,8 +443,8 @@ export function WorkflowStatus({ workflowId, projectName, onClose }: WorkflowSta
 
       {/* Action buttons */}
       <div className="d-flex gap-2 mt-3">
-        <button className="btn btn-outline-primary" onClick={handleGetOutput} disabled={status !== "completed"}>
-          Get Output
+        <button className="btn btn-outline-success" onClick={() => setShowOutput(true)} disabled={status !== "completed"}>
+          See Output
         </button>
         <button className="btn btn-outline-secondary" onClick={handleViewLog} disabled={!currentLogUrl}>
           View Logs
