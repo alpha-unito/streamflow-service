@@ -18,8 +18,10 @@ The backend server has already a docker file inside the directory `streamflow-se
 ```bash
 cd backend
 docker build -t streamflow-service-backend .
-docker run -p 4646:8080 -v /home/tfogliobonda/streamflow-service/default_projects:/default_projects --rm --detach streamflow-service-backend
+docker run -p 4646:8080 -v <PATH-TO-DEFAULT-PROJECTS>:/default_projects --rm --detach streamflow-service-backend
 ```
+
+- replace `<PATH-TO-DEFAULT-PROJECTS>` with the actual path to your default projects directory.
 
 ### setup and run the frontend
 
