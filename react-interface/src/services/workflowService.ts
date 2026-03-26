@@ -217,6 +217,68 @@ export async function downloadWorkflowOutput(username: string, projectName: stri
   window.URL.revokeObjectURL(url);
 }
 
+export interface WorkflowOutputEntry {
+  path: string;
+  is_dir: boolean;
+  size?: number;
+  modified?: string;
+}
+
+export interface WorkflowOutputListResponse {
+  usr: string;
+  project_name: string;
+  entries: WorkflowOutputEntry[];
+}
+
+export async function fetchWorkflowOutputList(username: string, projectName: string): Promise<WorkflowOutputListResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/workflow_output/${encodeURIComponent(username)}/${encodeURIComponent(projectName)}/list`,
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch workflow output list');
+  }
+
+  return await response.json();
+}
+
+export function getWorkflowOutputFileUrl(username: string, projectName: string, filePath: string): string {
+  const clean = filePath.replace(/^\/+/, '');
+  const encodedPath = clean
+    .split('/')
+    .filter(Boolean)
+    .map((seg) => encodeURIComponent(seg))
+    .join('/');
+  return `${API_BASE_URL}/workflow_output/${encodeURIComponent(username)}/${encodeURIComponent(projectName)}/files/${encodedPath}`;
+}
+
+export async function downloadWorkflowOutputFile(username: string, projectName: string, filePath: string): Promise<void> {
+  const clean = filePath.replace(/^\/+/, '');
+  const response = await fetch(getWorkflowOutputFileUrl(username, projectName, clean));
+
+  if (!response.ok) {
+    const fallback = 'Failed to download output file';
+    try {
+      const data = await response.json();
+      throw new Error(data?.detail || fallback);
+    } catch {
+      throw new Error(fallback);
+    }
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = clean.split('/').pop() || 'output-file';
+
+  document.body.appendChild(link);
+  link.click();
+
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+}
+
 export async function executeModifiedConfig(projectName: string, projectData: DefaultProjectStreamflowResponse): Promise<any> {
   if (!currentUser) {
     throw new Error('No user set. Please set a user first.');
