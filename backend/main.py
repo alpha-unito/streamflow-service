@@ -100,6 +100,7 @@ def _find_files(root_dir: str, predicate, *, prioritize=None) -> list[str]:
                 full = os.path.join(root, fname)
                 if prioritize and prioritize(fname):
                     results.insert(0, full)
+                    return results
                 else:
                     results.append(full)
     return results

@@ -4,6 +4,7 @@ SFExamples/*
 usrs_dir/*
 default_projects/**
 commands.txt
+restart.sh
 
 # Environment Variables
 .env

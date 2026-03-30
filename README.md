@@ -22,6 +22,11 @@ docker run -p 4646:8080 -v <PATH-TO-DEFAULT-PROJECTS>:/default_projects --rm --d
 ```
 
 - replace `<PATH-TO-DEFAULT-PROJECTS>` with the actual path to your default projects directory.
+	To allow the backend container to run Docker containers on the host, also mount the Docker socket:
+
+```bash
+docker run -p 4646:8080 -v /var/run/docker.sock:/var/run/docker.sock -v <PATH-TO-DEFAULT-PROJECTS>:/default_projects --rm --detach streamflow-service-backend
+```
 
 ### setup and run the frontend
 

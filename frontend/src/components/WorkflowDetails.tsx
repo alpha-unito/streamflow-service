@@ -6,12 +6,6 @@ import type { DefaultProject, DefaultProjectStreamflowResponse } from "../servic
 import { getDefaultProjectStreamflow, executeModifiedConfig as execModifiedConfig, getDefaultProjectImageUrl, getDefaultProjectDescription } from "../services/workflowService"
 import { WorkflowStatus } from "./WorkflowStatus"
 
-const DEPLOYMENT_OPTIONS = [
-  { value: 'broadwell', label: 'broadwell' },
-  { value: 'cascadelake', label: 'cascadelake' },
-  { value: 'epito', label: 'epito' }
-] as const;
-
 interface WorkflowDetailsProps {
   workflow: DefaultProject
 }
@@ -27,6 +21,7 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [imageError, setImageError] = useState<boolean>(false)
   const [descriptionError, setDescriptionError] = useState<string | null>(null)
+  const [showFileList, setShowFileList] = useState<boolean>(true)
 
   useEffect(() => {
     setLoading(true)
@@ -35,6 +30,7 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
     setNewProjectName(`${workflow.name}-modified`)
     setImageError(false)
     setDescriptionError(null)
+    setShowFileList(true)
 
     // Set image URL
     setImageUrl(getDefaultProjectImageUrl(workflow.name))
@@ -164,6 +160,9 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
   }
 
   const workflowData = getWorkflowBindings();
+  const deploymentOptions = Object.keys(projectData.streamflow_config?.deployments || {})
+    .sort()
+    .map((deploymentName) => ({ value: deploymentName, label: deploymentName }));
 
   return (
     <div>
@@ -187,7 +186,7 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
                     <img 
                       src={imageUrl || ''} 
                       alt={`${workflow.name} workflow diagram`}
-                      style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                       onError={handleImageError}
                     />
                   )}
@@ -229,19 +228,30 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
 
           {/* Project Files */}
           <div className="mb-4">
-            <h5>Project Files:</h5>
-            <ul className="list-group">
-              {Object.keys(projectData.project_files).map((filePath, index) => (
-                <li key={index} className="list-group-item py-1">
-                  <small>
-                    {filePath} 
-                    <span className="badge bg-secondary ms-2">
-                      {projectData.project_files[filePath].type}
-                    </span>
-                  </small>
-                </li>
-              ))}
-            </ul>
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <h5 className="mb-0">Project Files:</h5>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => setShowFileList((prev) => !prev)}
+              >
+                {showFileList ? 'Collapse' : 'Expand'}
+              </button>
+            </div>
+            {showFileList && (
+              <ul className="list-group">
+                {Object.keys(projectData.project_files).map((filePath, index) => (
+                  <li key={index} className="list-group-item py-1">
+                    <small>
+                      {filePath}
+                      <span className="badge bg-secondary ms-2">
+                        {projectData.project_files[filePath].type}
+                      </span>
+                    </small>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           {/* Deployment Configuration */}
@@ -267,7 +277,10 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
                           style={{ width: 'auto', minWidth: '120px' }}
                         >
                           <option value="">Select deployment</option>
-                          {DEPLOYMENT_OPTIONS.map((option) => (
+                          {binding.target?.deployment && !deploymentOptions.some((option) => option.value === binding.target.deployment) && (
+                            <option value={binding.target.deployment}>{binding.target.deployment} (current)</option>
+                          )}
+                          {deploymentOptions.map((option) => (
                             <option key={option.value} value={option.value}>
                               {option.label}
                             </option>
