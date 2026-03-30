@@ -75,13 +75,23 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
     const workflows = projectData.streamflow_config.workflows;
     const workflowName = Object.keys(workflows).find(name => workflows[name]?.bindings);
     
-    return workflowName ? {
+    if (!workflowName) return null;
+
+    const bindings = workflows[workflowName].bindings;
+    const stepBindings = Array.isArray(bindings)
+      ? bindings
+          .map((binding: any, index: number) => ({ binding, index }))
+          .filter(({ binding }) => typeof binding?.step === 'string' && binding.step.length > 0)
+      : [];
+
+    return {
       name: workflowName,
-      bindings: workflows[workflowName].bindings
-    } : null;
+      bindings,
+      stepBindings,
+    };
   };
 
-  const handleDeploymentChange = (stepIndex: number, newDeployment: string) => {
+  const handleDeploymentChange = (bindingIndex: number, newDeployment: string) => {
     if (!projectData?.streamflow_config?.workflows) return;
 
     const updatedData = { ...projectData };
@@ -90,8 +100,8 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
     // Find the first workflow with bindings
     const workflowName = Object.keys(workflows).find(name => workflows[name]?.bindings);
     
-    if (workflowName && workflows[workflowName].bindings[stepIndex]) {
-      workflows[workflowName].bindings[stepIndex].target.deployment = newDeployment;
+    if (workflowName && workflows[workflowName].bindings[bindingIndex]) {
+      workflows[workflowName].bindings[bindingIndex].target.deployment = newDeployment;
       
       // Update the streamflow file in project_files as well
       if (updatedData.project_files['streamflow.yml']) {
@@ -235,15 +245,15 @@ export function WorkflowDetails({ workflow }: WorkflowDetailsProps) {
           </div>
 
           {/* Deployment Configuration */}
-          {workflowData?.bindings && (
+          {workflowData?.stepBindings && workflowData.stepBindings.length > 0 && (
             <div className="mb-4">
               <h5>Workflow Steps Configuration:</h5>
               <div className="list-group">
-                {workflowData.bindings.map((binding: any, index: number) => (
+                {workflowData.stepBindings.map(({ binding, index }: { binding: any; index: number }, stepOrder: number) => (
                   <div key={index} className="list-group-item">
                     <div className="d-flex justify-content-between align-items-center">
                       <div>
-                        <h6 className="mb-1">Step: {binding.step || `Step ${index + 1}`}</h6>
+                        <h6 className="mb-1">Step: {binding.step || `Step ${stepOrder + 1}`}</h6>
                         <p className="mb-1 text-muted">
                           Deployment: {binding.target?.deployment || 'N/A'}
                         </p>
