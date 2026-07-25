@@ -5,6 +5,9 @@ usrs_dir/*
 default_projects/**
 commands.txt
 restart.sh
+ssh
+id_rsa
+id_ed25519
 
 # Environment Variables
 .env

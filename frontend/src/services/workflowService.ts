@@ -3,7 +3,7 @@ import type { Workflow } from "../types/workflow"
 // import type { WorkflowDetails } from "../types/workflowDetails"
 import * as YAML from 'yaml'
 
-const API_BASE_URL = "http://130.192.100.196:4646";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 let currentUser: string | null = null;
 

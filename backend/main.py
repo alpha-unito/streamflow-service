@@ -43,11 +43,38 @@ DEFAULT_PROJECTS_DIR = "/default_projects"
 # ---------------------------------------------------------------------------
 
 
+STREAMFLOW_LOCAL_WORKDIR = os.environ.get("STREAMFLOW_LOCAL_WORKDIR", "/tmp")
+
+
 def _get_custom_tmpdir() -> str:
     """Get custom temporary directory for streamflow."""
     custom_tmpdir = os.path.join(expanduser("~"), "tmp")
     os.makedirs(custom_tmpdir, exist_ok=True)
     return custom_tmpdir
+
+
+def _patch_local_workdir(project_path: str) -> None:
+    """Patch all local-type deployment workdirs in streamflow.yml to STREAMFLOW_LOCAL_WORKDIR.
+
+    Docker-in-Docker via socket requires volume mount paths to exist on the HOST at the
+    exact same path the backend container uses. Patching here ensures the locally deployment
+    uses a path that is bind-mounted identically on both sides.
+    """
+    sf_path = os.path.join(project_path, "streamflow.yml")
+    if not os.path.isfile(sf_path):
+        return
+    with open(sf_path) as f:
+        config = yaml.safe_load(f)
+    deployments = config.get("deployments", {})
+    patched = False
+    for dep in deployments.values():
+        if dep.get("type") == "local":
+            dep["workdir"] = STREAMFLOW_LOCAL_WORKDIR
+            patched = True
+    if patched:
+        os.makedirs(STREAMFLOW_LOCAL_WORKDIR, exist_ok=True)
+        with open(sf_path, "w") as f:
+            yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
 
 
 def _setup_file_logger(log_file_path: str, workflow_id: str) -> logging.Logger:
@@ -123,10 +150,13 @@ async def _run_workflow_task(project_path: str, log_file_path: str, workflow_id:
         tmpdir = _get_custom_tmpdir()
         wf_logger.info("Using temporary directory: %s", tmpdir)
 
+        _patch_local_workdir(project_path)
+        wf_logger.info("Patched local deployment workdir to: %s", STREAMFLOW_LOCAL_WORKDIR)
+
         env = os.environ.copy()
         env["TMPDIR"] = tmpdir
 
-        cmd = ["streamflow", "run", "streamflow.yml","--outdir", "./output"]
+        cmd = ["streamflow", "run", "streamflow.yml", "--outdir", "./output"]
         wf_logger.info("Running command: %s", " ".join(cmd))
         wf_logger.info("Working directory: %s", project_path)
 

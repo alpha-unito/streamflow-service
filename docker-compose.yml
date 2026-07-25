@@ -1,0 +1,26 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - STREAMFLOW_LOCAL_WORKDIR=/home/tommo/Desktop/Coding/ALPHA/ivan/tmp
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./usrs_dir:/app/usrs_dir
+      - ./default_projects:/default_projects
+      - ./ssh:/root/.ssh
+      - /home/tommo/Desktop/Coding/ALPHA/ivan/tmp:/home/tommo/Desktop/Coding/ALPHA/ivan/tmp
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:8080"
+    depends_on:
+      - backend
+    restart: unless-stopped
