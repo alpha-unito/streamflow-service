@@ -1,6 +1,6 @@
 # Streamfow-service - Web platform
 
-This repository contains is an implementation of a web platform for deployment of workflows using [streamflow](https://streamflow.di.unito.it/). 
+This repository contains is an implementation of a web platform for deployment of workflows using [StreamFlow](https://streamflow.di.unito.it/). 
 
 The platform relies on fastAPI as backend server and React node.js as frontend server, deployed trougth Docker.
 
